@@ -1701,6 +1701,7 @@ func cliRunCommandAllowed(args []string) bool {
 		"sync-calendar",
 		"sync-circleback",
 		"sync-discord",
+		"sync-external",
 		"sync-granola",
 		"sync-notion-meetings",
 		"sync-slack",
