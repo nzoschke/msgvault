@@ -463,6 +463,9 @@ func checkpointMatchesRequest(run *store.SyncRun, requestFingerprint string) boo
 func (s *Syncer) fullCheckpointMatchesRequest(
 	run *store.SyncRun, requestFingerprint string,
 ) bool {
+	if run == nil || run.ErrorsCount > 0 {
+		return false
+	}
 	// Pre-coverage tokens (including legacy untyped requests) may have been
 	// obtained from a Gmail listing excluding Spam/Trash. Restart those scans.
 	return checkpointMatchesRequest(run, requestFingerprint)
@@ -635,6 +638,10 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 			if len(forcedIDs) > 0 {
 				rawMessages, err := s.getMessagesRawBatchWithDiagnostics(ctx, forcedIDs)
 				if err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return nil, err
+					}
+
 					for _, id := range forcedIDs {
 						s.recordSyncItem(syncID, id, syncItemPhaseFetch, store.SyncRunItemStatusError, syncItemKindBatchFetchError, err)
 					}
@@ -781,6 +788,9 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 	if len(labelRefreshIDs) > 0 {
 		labelResults, err := labelReader.GetMessageLabelsBatch(ctx, labelRefreshIDs)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
 			if s.requireLabelRefresh {
 				return nil, fmt.Errorf("fetch recovery message labels: %w", err)
 			}
@@ -943,6 +953,10 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 		rawMessages, err := s.getMessagesRawBatchWithIdentityValidation(
 			ctx, fetchIDs, inconclusiveRefreshes)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+
 			for _, id := range fetchIDs {
 				s.recordSyncItem(syncID, id, syncItemPhaseFetch, store.SyncRunItemStatusError, syncItemKindBatchFetchError, err)
 			}
