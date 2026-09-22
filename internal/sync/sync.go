@@ -452,6 +452,9 @@ func checkpointMatchesRequest(run *store.SyncRun, requestFingerprint string) boo
 func (s *Syncer) fullCheckpointMatchesRequest(
 	run *store.SyncRun, requestFingerprint string,
 ) bool {
+	if run == nil || run.ErrorsCount > 0 {
+		return false
+	}
 	if checkpointMatchesRequest(run, requestFingerprint) {
 		return true
 	}
@@ -635,6 +638,10 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 			if len(forcedIDs) > 0 {
 				rawMessages, err := s.getMessagesRawBatchWithDiagnostics(ctx, forcedIDs)
 				if err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return nil, err
+					}
+
 					for _, id := range forcedIDs {
 						s.recordSyncItem(syncID, id, syncItemPhaseFetch, store.SyncRunItemStatusError, syncItemKindBatchFetchError, err)
 					}
@@ -761,6 +768,10 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 	if len(labelRefreshIDs) > 0 {
 		labelResults, err := labelReader.GetMessageLabelsBatch(ctx, labelRefreshIDs)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+
 			for _, id := range labelRefreshIDs {
 				s.recordSyncItem(syncID, id, syncItemPhaseFetch, store.SyncRunItemStatusError, syncItemKindBatchFetchError, err)
 			}
@@ -906,6 +917,10 @@ func (s *Syncer) processBatch(ctx context.Context, syncID, sourceID int64, listR
 		rawMessages, err := s.getMessagesRawBatchWithIdentityValidation(
 			ctx, fetchIDs, inconclusiveRefreshes)
 		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+
 			for _, id := range fetchIDs {
 				s.recordSyncItem(syncID, id, syncItemPhaseFetch, store.SyncRunItemStatusError, syncItemKindBatchFetchError, err)
 			}
