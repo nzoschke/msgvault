@@ -31,11 +31,13 @@ const (
 
 // Client implements the Gmail API interface.
 type Client struct {
-	httpClient  *http.Client
-	rateLimiter *RateLimiter
-	logger      *slog.Logger
-	userID      string // "me" for authenticated user
-	concurrency int    // Max parallel requests for batch operations
+	includeSpamTrash bool
+	externalReadOnly bool
+	httpClient       *http.Client
+	rateLimiter      *RateLimiter
+	logger           *slog.Logger
+	userID           string // "me" for authenticated user
+	concurrency      int    // Max parallel requests for batch operations
 }
 
 // ClientOption configures a Client.
@@ -93,6 +95,9 @@ func (c *Client) Close() error {
 // request makes an HTTP request with rate limiting and retry logic.
 // bodyBytes can be nil for requests without a body.
 func (c *Client) request(ctx context.Context, op Operation, method, path string, bodyBytes []byte) ([]byte, error) {
+	if c.externalReadOnly && method != http.MethodGet {
+		return nil, errors.New("external Gmail client only permits reads")
+	}
 	// Quota pauses can exceed the request timeout. Wait using the caller's
 	// context so a previous request's throttle does not exhaust this budget.
 	if err := c.rateLimiter.Acquire(ctx, op); err != nil {
@@ -369,7 +374,7 @@ func (c *Client) ListLabels(ctx context.Context) ([]*Label, error) {
 
 // ListMessages returns message IDs matching the query.
 func (c *Client) ListMessages(ctx context.Context, query string, pageToken string) (*MessageListResponse, error) {
-	return c.listMessages(ctx, query, pageToken, false)
+	return c.listMessages(ctx, query, pageToken, c.includeSpamTrash)
 }
 
 // ListCompleteMessageSnapshot returns every message still present in Gmail,
