@@ -3361,7 +3361,6 @@ func TestInitSyncState_Resume(t *testing.T) {
 		MessagesProcessed: 50,
 		MessagesAdded:     45,
 		MessagesUpdated:   3,
-		ErrorsCount:       2,
 	}
 	require.NoError(env.Store.UpdateSyncCheckpoint(syncID, checkpoint), "UpdateSyncCheckpoint")
 	require.NoError(env.Store.FailSync(syncID, "worker stopped"))
