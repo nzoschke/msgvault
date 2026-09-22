@@ -1756,6 +1756,7 @@ func cliRunCommandAllowed(args []string) bool {
 		"sync-plaud",
 		"sync-twenty",
 		"sync-discord",
+		"sync-external",
 		"sync-granola",
 		"sync-muesli",
 		"sync-notion-meetings",

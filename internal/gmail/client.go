@@ -39,11 +39,13 @@ var errWriteOutcomeUnknown = errors.New("gmail write outcome is unknown")
 
 // Client implements the Gmail API interface.
 type Client struct {
-	httpClient  *http.Client
-	rateLimiter *RateLimiter
-	logger      *slog.Logger
-	userID      string // "me" for authenticated user
-	concurrency int    // Max parallel requests for batch operations
+	includeSpamTrash bool
+	externalReadOnly bool
+	httpClient       *http.Client
+	rateLimiter      *RateLimiter
+	logger           *slog.Logger
+	userID           string // "me" for authenticated user
+	concurrency      int    // Max parallel requests for batch operations
 }
 
 // ClientOption configures a Client.
@@ -101,6 +103,9 @@ func (c *Client) Close() error {
 // request makes an HTTP request with rate limiting and retry logic.
 // bodyBytes can be nil for requests without a body.
 func (c *Client) request(ctx context.Context, op Operation, method, path string, bodyBytes []byte) ([]byte, error) {
+	if c.externalReadOnly && method != http.MethodGet {
+		return nil, errors.New("external Gmail client only permits reads")
+	}
 	var lastErr error
 	for quotaRetries := 0; ; quotaRetries++ {
 		// Quota pauses can exceed the request timeout. Wait under the caller's
@@ -124,6 +129,7 @@ func (c *Client) request(ctx context.Context, op Operation, method, path string,
 		lastErr = err
 		c.logger.Info("Gmail throttled request; retrying after quota pause",
 			"path", path, "attempt", quotaRetries+1, "max", maxQuotaRetries, "error", err)
+
 	}
 }
 
@@ -701,7 +707,7 @@ func (c *Client) ListLabels(ctx context.Context) ([]*Label, error) {
 
 // ListMessages returns message IDs matching the query.
 func (c *Client) ListMessages(ctx context.Context, query string, pageToken string) (*MessageListResponse, error) {
-	return c.listMessages(ctx, query, pageToken, false)
+	return c.listMessages(ctx, query, pageToken, c.includeSpamTrash)
 }
 
 // ListCompleteMessageSnapshot returns every message still present in Gmail,
