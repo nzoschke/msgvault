@@ -1,0 +1,74 @@
+name: External Gmail release
+
+on:
+  push:
+    tags: ['v*-hc.*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y gcc g++ git curl tar gzip libsqlite3-dev ca-certificates
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - name: Install Go
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          version=$(awk '/^go / {print $2}' go.mod)
+          curl -fsSL --retry 5 "https://go.dev/dl/go${version}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
+          tar -C /usr/local -xzf /tmp/go.tar.gz
+          echo /usr/local/go/bin >> "$GITHUB_PATH"
+      - name: Build and test archive
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          scripts/build-vault-release.sh "$RELEASE_VERSION"
+          mkdir dist/unpacked
+          tar -xzf dist/*.tar.gz -C dist/unpacked
+          scripts/smoke-vault-release.sh dist/unpacked/msgvault
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: linux-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish release
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          cat *.sha256 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          gh release create "$RELEASE_VERSION" *.tar.gz SHA256SUMS --verify-tag --prerelease --latest=false --title "$RELEASE_VERSION" --notes 'Linux CLI and daemon binaries with externally authenticated Gmail sync and interrupted-sync recovery. Includes upstream v0.20.0 and subsequent documentation updates. Built on Ubuntu 22.04 for amd64 and arm64. Web UI assets are not included.'
