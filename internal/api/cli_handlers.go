@@ -1817,6 +1817,7 @@ func cliRunCommandAllowed(args []string) bool {
 		"sync-twenty",
 		"sync-pocket",
 		"sync-discord",
+		"sync-external",
 		"sync-granola",
 		"sync-inline",
 		"sync-muesli",
