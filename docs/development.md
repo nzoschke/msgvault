@@ -94,10 +94,12 @@ asset. `scripts/smoke-container.sh` repeats these checks in the loaded image
 with networking disabled. These commands build and check local artifacts; they
 do not publish them.
 
-Repository-owned release-publishing workflows and the old release/tagging
-scripts have been removed. Pushing a tag no longer invokes those publishers. The
-Docker inputs, local build commands, installers, and ordinary CI remain
-available.
+The external Gmail fork publishes Linux CLI and daemon archives when a tag such
+as `v0.20.0-hc.1` is pushed. The `vault-release.yml` workflow builds
+amd64 and arm64 binaries on Ubuntu 22.04, tests each archive, and publishes a
+prerelease with SHA-256 checksums. These archives include external Gmail
+authentication and sync recovery patches, but do not include Web UI assets.
+Use the upstream version in the tag to identify the release base.
 
 ## Test
 
