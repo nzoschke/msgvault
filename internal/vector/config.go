@@ -400,7 +400,8 @@ func (s SearchConfig) MaxPageSizeHybridClamp() int {
 // EmbedConfig groups embed-side concerns that aren't part of the
 // embedding endpoint itself (e.g. scheduling).
 type EmbedConfig struct {
-	Schedule EmbedScheduleConfig `toml:"schedule"`
+	AutoInitialize bool                `toml:"auto_initialize"`
+	Schedule       EmbedScheduleConfig `toml:"schedule"`
 	// BackstopInterval is how often the daemon embed job also runs a full
 	// watermark-ignoring backstop pass (recovering below-watermark
 	// stragglers from repair-encoding resets, transient errors, or crashes)
