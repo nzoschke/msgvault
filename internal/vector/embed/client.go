@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ var ErrPermanent4xx = vector.ErrPermanent4xx
 // Config controls an embeddings Client. The zero value is not usable; callers
 // must set Endpoint, Model, and Dimension at a minimum.
 type Config struct {
+	AuthorizationEnv         string
+	AuthorizationEndpointEnv string
 	// Endpoint is the base URL including /v1 (e.g. "http://host:8080/v1").
 	// The request path "/embeddings" is appended.
 	Endpoint string
@@ -64,6 +67,9 @@ type Client struct {
 
 // NewClient constructs a Client, applying defaults for Timeout and MaxRetries.
 func NewClient(cfg Config) *Client {
+	if cfg.AuthorizationEnv != "" {
+		cfg.RejectRedirects = true
+	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
@@ -215,7 +221,17 @@ func (c *Client) doOnce(ctx context.Context, body []byte, want int) ([][]float32
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if c.cfg.APIKey != "" {
+	if c.cfg.AuthorizationEnv != "" {
+		endpoint := os.Getenv(c.cfg.AuthorizationEndpointEnv)
+		authorization := os.Getenv(c.cfg.AuthorizationEnv)
+		if endpoint == "" || strings.TrimRight(endpoint, "/") != strings.TrimRight(c.cfg.Endpoint, "/") {
+			return nil, errors.New("embedding authorization is not valid for this endpoint")
+		}
+		if authorization == "" || strings.ContainsAny(authorization, "\r\n") {
+			return nil, errors.New("embedding authorization is unavailable")
+		}
+		req.Header.Set("Authorization", authorization)
+	} else if c.cfg.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
 	}
 	resp, err := c.http.Do(req)
