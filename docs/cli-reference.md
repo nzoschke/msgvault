@@ -330,6 +330,29 @@ under [`sync`](#sync).
 
 ---
 
+## sync-external
+
+Back up a Gmail account through a Gmail-compatible endpoint and a Unix socket
+credential provider. The socket supplies short-lived access tokens in memory.
+
+```bash
+msgvault sync-external account@example.com --endpoint https://proxy.example.test/v1 --credential-socket /path/to/token.sock --after 2025-09-23
+```
+
+`--after YYYY-MM-DD` bounds the initial backfill using a Gmail date query.
+Omit it to backfill all mail. Keep the same date across retries so saved
+pagination checkpoints remain valid. `--include-spam-trash` includes those
+folders in the listing.
+
+The initial backfill saves its starting history ID across interruptions and
+establishes an incremental cursor only after completing without message errors.
+Later invocations use incremental sync, including when `--after` is still
+present. The date filter does not constrain incremental changes or the full
+mailbox recovery used when Gmail history expires. Existing accounts with a
+history cursor continue incrementally without repeating their initial backfill.
+
+---
+
 ## sync
 
 Sync new and changed messages. Gmail accounts use the Gmail History API; IMAP accounts perform a mailbox scan and skip messages already in the database. The optional account can be an identifier or display name. When it is omitted, the command syncs all accounts that have completed an initial full sync.

@@ -39,6 +39,8 @@ const (
 
 // Options configures sync behavior.
 type Options struct {
+	InitialBackfill bool
+
 	// SourceType is the type of source being synced ("gmail" or "imap").
 	// Defaults to "gmail" if empty.
 	SourceType string
@@ -315,7 +317,7 @@ func (s *Syncer) completeSyncAndRunHook(
 	mailboxChanged bool,
 ) error {
 	publishSourceCursor := source.SourceType != sourceTypeGmail ||
-		(s.opts.Query == "" && s.opts.Limit == 0)
+		(s.opts.Query == "" && s.opts.Limit == 0) || s.opts.InitialBackfill
 	if err := s.completeSyncWithoutHook(
 		ctx, syncID, source.ID, historyID, publishSourceCursor,
 	); err != nil {
@@ -454,7 +456,7 @@ func (s *Syncer) fullCheckpointMatchesRequest(
 		return false
 	}
 	if checkpointMatchesRequest(run, requestFingerprint) {
-		return true
+		return !s.opts.InitialBackfill || (run.CursorAfter.Valid && run.CursorAfter.String != "")
 	}
 	if run == nil || run.RequestFingerprint.Valid ||
 		(run.CursorAfter.Valid && run.CursorAfter.String != "") {
@@ -464,7 +466,7 @@ func (s *Syncer) fullCheckpointMatchesRequest(
 	// Only a new default Gmail traversal opts in to those checkpoints; filtered
 	// and limited requests still require an exact fingerprint. Remove this
 	// fallback when the minimum supported archive version is newer than v0.19.3.
-	return (s.opts.SourceType == "" || s.opts.SourceType == sourceTypeGmail) &&
+	return !s.opts.InitialBackfill && (s.opts.SourceType == "" || s.opts.SourceType == sourceTypeGmail) &&
 		s.opts.Query == "" && s.opts.Limit == 0
 }
 
@@ -478,6 +480,9 @@ func (s *Syncer) fullSyncRequestFingerprint() string {
 		"full:v1\x00%s\x00%s\x00%d\x00%t",
 		s.opts.SourceType, s.opts.Query, s.opts.Limit, s.opts.NoResume,
 	)
+	if s.opts.InitialBackfill {
+		request = "initial-backfill:v1\x00" + request
+	}
 	return fmt.Sprintf("full:v1:%x", sha256.Sum256([]byte(request)))
 }
 
@@ -515,6 +520,9 @@ func (s *Syncer) initSyncState(
 				MessagesAdded:     priorSync.MessagesAdded,
 				MessagesUpdated:   priorSync.MessagesUpdated,
 				ErrorsCount:       priorSync.ErrorsCount,
+			}
+			if s.opts.InitialBackfill {
+				state.handoffCursor = priorSync.CursorAfter.String
 			}
 			state.wasResumed = true
 			s.logger.Info("resuming sync", "messages_processed", state.checkpoint.MessagesProcessed)
@@ -1166,6 +1174,15 @@ func (s *Syncer) FullWithFinalizer(
 		resolvedSource.SourceType = sourceType
 	}
 	return s.runWithSyncExecution(ctx, resolvedSource.ID, func(execution *store.SyncExecution) (*gmail.SyncSummary, error) {
+		if s.opts.InitialBackfill {
+			current, err := s.store.GetSourceByID(resolvedSource.ID)
+			if err != nil {
+				return nil, fmt.Errorf("load initial backfill source: %w", err)
+			}
+			if sourceType != sourceTypeGmail || s.opts.Limit != 0 || (current.SyncCursor.Valid && current.SyncCursor.String != "") {
+				return nil, errors.New("initial backfill requires a Gmail source without a sync cursor and no message limit")
+			}
+		}
 		if sourceType == sourceTypeGmail && !s.opts.NoResume && s.opts.Query == "" && s.opts.Limit == 0 {
 			prior, priorErr := s.store.GetLatestCheckpointedSync(resolvedSource.ID)
 			if priorErr != nil && !errors.Is(priorErr, store.ErrSyncRunNotFound) {
@@ -1359,19 +1376,19 @@ func (s *Syncer) full(
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
 	handoffHistoryID := profile.HistoryID
-	if reconcilePresence {
+	if reconcilePresence || s.opts.InitialBackfill {
 		if state.handoffCursor == "" {
 			state.handoffCursor = strconv.FormatUint(profile.HistoryID, 10)
-			if err := s.store.PinSyncHandoffCursorContext(ctx, state.syncID, state.handoffCursor); err != nil {
-				s.failStoppedSync(state.syncID, err)
-				return nil, fmt.Errorf("pin Gmail history recovery cursor: %w", err)
-			}
 		} else {
 			handoffHistoryID, err = strconv.ParseUint(state.handoffCursor, 10, 64)
 			if err != nil {
 				s.failStoppedSync(state.syncID, err)
 				return nil, fmt.Errorf("parse Gmail history recovery cursor %q: %w", state.handoffCursor, err)
 			}
+		}
+		if err := s.store.PinSyncHandoffCursorContext(ctx, state.syncID, state.handoffCursor); err != nil {
+			s.failStoppedSync(state.syncID, err)
+			return nil, fmt.Errorf("pin Gmail handoff cursor: %w", err)
 		}
 	}
 
@@ -1513,6 +1530,11 @@ func (s *Syncer) full(
 		s.logger.Warn("full sync completed with errors",
 			"errors", state.checkpoint.ErrorsCount,
 			"history_id", historyIDStr)
+	}
+	if s.opts.InitialBackfill && state.checkpoint.ErrorsCount > 0 {
+		err := fmt.Errorf("initial backfill has %d unresolved message errors", state.checkpoint.ErrorsCount)
+		s.failStoppedSync(state.syncID, err)
+		return nil, err
 	}
 	// Mark sync complete before running best-effort provider maintenance.
 	if err := s.completeSyncAndRunHook(ctx, state.syncID, historyIDStr, source, true); err != nil {
