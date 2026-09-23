@@ -176,18 +176,20 @@ func (m MultimodalConfig) ImageQueriesEnabled() bool {
 // EmbeddingsConfig configures the external embedding endpoint used to convert
 // message text into vectors.
 type EmbeddingsConfig struct {
-	APIFormat      EmbeddingAPIFormat `toml:"api_format"`
-	Endpoint       string             `toml:"endpoint"`
-	APIKeyEnv      string             `toml:"api_key_env"`
-	Model          string             `toml:"model"`
-	DocumentPrefix string             `toml:"document_prefix"`
-	QueryPrefix    string             `toml:"query_prefix"`
-	Dimension      int                `toml:"dimension"`
-	BatchSize      int                `toml:"batch_size"`
-	Timeout        time.Duration      `toml:"timeout"`
-	MaxRetries     int                `toml:"max_retries"`
-	MaxInputChars  int                `toml:"max_input_chars"`
-	ETAWindow      int                `toml:"eta_window"`
+	AuthorizationEnv         string             `toml:"authorization_env"`
+	AuthorizationEndpointEnv string             `toml:"authorization_endpoint_env"`
+	APIFormat                EmbeddingAPIFormat `toml:"api_format"`
+	Endpoint                 string             `toml:"endpoint"`
+	APIKeyEnv                string             `toml:"api_key_env"`
+	Model                    string             `toml:"model"`
+	DocumentPrefix           string             `toml:"document_prefix"`
+	QueryPrefix              string             `toml:"query_prefix"`
+	Dimension                int                `toml:"dimension"`
+	BatchSize                int                `toml:"batch_size"`
+	Timeout                  time.Duration      `toml:"timeout"`
+	MaxRetries               int                `toml:"max_retries"`
+	MaxInputChars            int                `toml:"max_input_chars"`
+	ETAWindow                int                `toml:"eta_window"`
 }
 
 // EffectiveAPIFormat returns the configured API format, defaulting to the
@@ -203,6 +205,15 @@ func (e EmbeddingsConfig) EffectiveAPIFormat() EmbeddingAPIFormat {
 // message-vector lane to be enabled. Document vectors use the same provider
 // policy under their own enablement and consent controls.
 func (e EmbeddingsConfig) Validate() error {
+	if e.AuthorizationEnv != "" || e.AuthorizationEndpointEnv != "" {
+		if !environmentVariableName.MatchString(e.AuthorizationEnv) || !environmentVariableName.MatchString(e.AuthorizationEndpointEnv) {
+			return errors.New("vector.embeddings: authorization_env and authorization_endpoint_env must both be valid environment variable names")
+		}
+		if e.EffectiveAPIFormat() != APIFormatOpenAI || e.APIKeyEnv != "" {
+			return errors.New("vector.embeddings: environment authorization requires the OpenAI format without api_key_env")
+		}
+	}
+
 	switch e.EffectiveAPIFormat() {
 	case APIFormatOpenAI, APIFormatVoyageContextual:
 	default:

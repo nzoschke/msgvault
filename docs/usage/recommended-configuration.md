@@ -29,6 +29,32 @@ consent, or index build. `setup status` checks those prerequisites and shows the
 next step. Its provider confirmations do not replace those separate consents. A
 key by itself never starts hosted processing.
 
+## Use an authenticated embedding proxy
+
+A service launcher can supply an Authorization header and its permitted endpoint
+through environment variables, without saving a provider API key in the archive:
+
+```bash
+export MSGVAULT_PROXY_AUTHORIZATION="Basic ..."
+export MSGVAULT_PROXY_ENDPOINT="https://proxy.example.test/llm/v1"
+msgvault setup proxy --endpoint "$MSGVAULT_PROXY_ENDPOINT" \
+  --authorization-env MSGVAULT_PROXY_AUTHORIZATION \
+  --authorization-endpoint-env MSGVAULT_PROXY_ENDPOINT
+```
+
+This fills missing settings for `text-embedding-3-small` with 1536 dimensions,
+a one-minute indexing schedule, and indexing after sync. Semantic search stays
+off by default. Existing settings, including the enable switch, are preserved.
+Enable **Semantic search** in the web app's Search settings and save. The daemon
+must restart to apply the change; service managers can watch `config.toml` to
+automate that restart. Disabling the switch stops indexing and semantic queries
+after the restart and preserves the existing vectors.
+
+The launcher must pass both environment variables to the daemon. Requests fail
+before sending data if the credential is missing or the endpoint does not match.
+Provider redirects are rejected. This setup does not enable people sweeps,
+person embeddings, document vectors, or visual search.
+
 ## What starts without provider setup
 
 A fresh archive supports keyword search, browsing, saved people, and local

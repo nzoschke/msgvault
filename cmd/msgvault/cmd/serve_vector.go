@@ -338,7 +338,9 @@ func newEmbeddingRuntime(vectorCfg vector.Config, deps embeddingRuntimeDeps) (*e
 // openAIEmbedConfig keeps indexing and query clients on the same settings.
 func openAIEmbedConfig(vectorCfg vector.Config, apiKey string) embed.Config {
 	return embed.Config{
-		Endpoint: vectorCfg.Embeddings.Endpoint, APIKey: apiKey,
+		AuthorizationEnv:         vectorCfg.Embeddings.AuthorizationEnv,
+		AuthorizationEndpointEnv: vectorCfg.Embeddings.AuthorizationEndpointEnv,
+		Endpoint:                 vectorCfg.Embeddings.Endpoint, APIKey: apiKey,
 		Model: vectorCfg.Embeddings.Model, Dimension: vectorCfg.Embeddings.Dimension,
 		Timeout: vectorCfg.Embeddings.Timeout, MaxRetries: vectorCfg.Embeddings.MaxRetries,
 		DocumentPrefix:  vectorCfg.Embeddings.DocumentPrefix,
