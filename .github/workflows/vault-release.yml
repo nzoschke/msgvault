@@ -88,4 +88,4 @@ jobs:
         run: |
           cat *.sha256 > SHA256SUMS
           sha256sum --check SHA256SUMS
-          gh release create "$RELEASE_VERSION" *.tar.gz SHA256SUMS --verify-tag --prerelease --latest=false --title "$RELEASE_VERSION" --notes 'Linux CLI and daemon binaries with externally authenticated Gmail sync and interrupted-sync recovery. Includes upstream v0.20.0 and subsequent documentation updates. Built on Ubuntu 22.04 for amd64 and arm64. Includes the embedded browser application.'
+          gh release create "$RELEASE_VERSION" *.tar.gz SHA256SUMS --verify-tag --prerelease --latest=false --title "$RELEASE_VERSION" --notes 'Linux CLI and daemon binaries with externally authenticated Gmail sync and interrupted-sync recovery. Built from the tagged source on Ubuntu 22.04 for amd64 and arm64. Includes the embedded browser application and default-off semantic search through authenticated embedding proxies.'
