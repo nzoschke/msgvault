@@ -8,6 +8,7 @@ output="${2:-$repo_root/dist}"
 mkdir -p "$output"
 output="$(cd "$output" && pwd)"
 cd "$repo_root"
+make web-embed
 architecture="$(go env GOARCH)"
 [[ "$(go env GOOS)" == linux && "$architecture" =~ ^(amd64|arm64)$ ]] || { echo "Linux amd64 or arm64 required" >&2; exit 1; }
 commit="$(git rev-parse HEAD)"
@@ -18,6 +19,7 @@ trap 'rm -rf "$build_dir"' EXIT
 CGO_ENABLED=1 GOWORK=off go build -tags 'fts5 sqlite_vec' -trimpath -buildvcs=false \
   -ldflags "-s -w -X go.kenn.io/msgvault/cmd/msgvault/cmd.Version=$version -X go.kenn.io/msgvault/cmd/msgvault/cmd.Commit=$commit -X go.kenn.io/msgvault/cmd/msgvault/cmd.BuildDate=$build_date" \
   -o "$build_dir/msgvault" ./cmd/msgvault
+node scripts/check-web-assets.mjs --binary "$build_dir/msgvault"
 "$build_dir/msgvault" sync-external --help >/dev/null
 asset="msgvault_${version}_linux_${architecture}.tar.gz"
 tar --sort=name --mtime="@$build_epoch" --owner=0 --group=0 --numeric-owner -C "$build_dir" -czf "$output/$asset" msgvault
