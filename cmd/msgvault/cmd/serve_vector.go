@@ -721,7 +721,36 @@ func setupVectorFeatures(ctx context.Context, mainStore *store.Store, mainPath s
 			features.Visual = visualRuntime
 		}
 	}
+	if !readOnly {
+		if err := ensureInitialEmbeddingGeneration(ctx, backend, vecCfg); err != nil {
+			_ = closeFn()
+			return nil, err
+		}
+	}
 	return features, nil
+}
+
+func ensureInitialEmbeddingGeneration(ctx context.Context, backend vector.Backend, c vector.Config) error {
+	if !c.Enabled || !c.Embed.AutoInitialize {
+		return nil
+	}
+	if _, err := backend.ActiveGeneration(ctx); err == nil {
+		return nil
+	} else if !errors.Is(err, vector.ErrNoActiveGeneration) {
+		return fmt.Errorf("read initial embedding generation: %w", err)
+	}
+	building, err := backend.BuildingGeneration(ctx)
+	if err != nil {
+		return fmt.Errorf("read building embedding generation: %w", err)
+	}
+	if building != nil {
+		return nil
+	}
+	_, err = backend.CreateGeneration(ctx, c.Embeddings.Model, c.Embeddings.Dimension, c.GenerationFingerprint())
+	if err != nil {
+		return fmt.Errorf("initialize embedding generation: %w", err)
+	}
+	return nil
 }
 
 func documentVectorRequestGate(st *store.Store, vectorCfg vector.Config, purpose string) embed.BeforeRequestFunc {
