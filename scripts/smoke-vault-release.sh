@@ -12,6 +12,8 @@ mkdir -p "$scratch/home"
 export HOME="$scratch/home"
 "$binary" version
 "$binary" sync-external --help >/dev/null
+mkdir -p "$scratch/vault"
+"$binary" --home "$scratch/vault" setup proxy --endpoint https://proxy.example.test/llm/v1 --authorization-env TEST_AUTHORIZATION --authorization-endpoint-env TEST_ENDPOINT
 "$binary" --home "$scratch/vault" init-db
 "$binary" --home "$scratch/vault" build-cache --full-rebuild
 test "$("$binary" --home "$scratch/vault" query --format csv 'SELECT COUNT(*) AS messages FROM messages')" = "$(printf 'messages\n0')"
