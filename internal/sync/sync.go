@@ -43,6 +43,8 @@ const (
 // Options configures sync behavior.
 type Options struct {
 	RelayedSenders []mime.RelayedSenderRule
+	InitialBackfill bool
+
 	// SourceType is the type of source being synced ("gmail" or "imap").
 	// Defaults to "gmail" if empty.
 	SourceType string
@@ -326,7 +328,7 @@ func (s *Syncer) completeSyncAndRunHook(
 	mailboxChanged bool,
 ) error {
 	publishSourceCursor := source.SourceType != sourceTypeGmail ||
-		(s.opts.Query == "" && s.opts.Limit == 0)
+		(s.opts.Query == "" && s.opts.Limit == 0) || s.opts.InitialBackfill
 	if err := s.completeSyncWithoutHook(
 		ctx, syncID, source.ID, historyID, publishSourceCursor,
 	); err != nil {
@@ -468,7 +470,7 @@ func (s *Syncer) fullCheckpointMatchesRequest(
 	}
 	// Pre-coverage tokens (including legacy untyped requests) may have been
 	// obtained from a Gmail listing excluding Spam/Trash. Restart those scans.
-	return checkpointMatchesRequest(run, requestFingerprint)
+	return checkpointMatchesRequest(run, requestFingerprint) && (!s.opts.InitialBackfill || (run.CursorAfter.Valid && run.CursorAfter.String != ""))
 }
 
 // Keep the old store fingerprint unchanged: legacy migrations must not stamp
@@ -492,6 +494,9 @@ func (s *Syncer) fullSyncRequestFingerprint() string {
 		"full:v1\x00%s\x00%s\x00%d\x00%t",
 		s.opts.SourceType, s.opts.Query, s.opts.Limit, s.opts.NoResume,
 	)
+	if s.opts.InitialBackfill {
+		request = "initial-backfill:v1\x00" + request
+	}
 	version := "full:v1"
 	if s.opts.SourceType == "" || s.opts.SourceType == sourceTypeGmail {
 		// Checkpoints from before the History boundary was saved must restart.
@@ -535,6 +540,9 @@ func (s *Syncer) initSyncState(
 				MessagesAdded:     priorSync.MessagesAdded,
 				MessagesUpdated:   priorSync.MessagesUpdated,
 				ErrorsCount:       priorSync.ErrorsCount,
+			}
+			if s.opts.InitialBackfill {
+				state.handoffCursor = priorSync.CursorAfter.String
 			}
 			state.wasResumed = true
 			s.logger.Info("resuming sync", "messages_processed", state.checkpoint.MessagesProcessed)
@@ -1219,6 +1227,15 @@ func (s *Syncer) FullWithFinalizer(
 		resolvedSource.SourceType = sourceType
 	}
 	return s.runWithSyncExecution(ctx, resolvedSource.ID, func(execution *store.SyncExecution) (*gmail.SyncSummary, error) {
+		if s.opts.InitialBackfill {
+			current, err := s.store.GetSourceByID(resolvedSource.ID)
+			if err != nil {
+				return nil, fmt.Errorf("load initial backfill source: %w", err)
+			}
+			if sourceType != sourceTypeGmail || s.opts.Limit != 0 || (current.SyncCursor.Valid && current.SyncCursor.String != "") {
+				return nil, errors.New("initial backfill requires a Gmail source without a sync cursor and no message limit")
+			}
+		}
 		if sourceType == sourceTypeGmail {
 			prior, priorErr := s.store.GetLatestCheckpointedSync(resolvedSource.ID)
 			if priorErr != nil && !errors.Is(priorErr, store.ErrSyncRunNotFound) {
@@ -1457,7 +1474,7 @@ func (s *Syncer) full(
 	}
 	handoffHistoryID := profile.HistoryID
 	isUnrestrictedGmailFull := source.SourceType == sourceTypeGmail && s.opts.Query == "" && s.opts.Limit == 0
-	if isUnrestrictedGmailFull {
+	if isUnrestrictedGmailFull || s.opts.InitialBackfill {
 		if state.handoffCursor == "" {
 			state.handoffCursor = strconv.FormatUint(profile.HistoryID, 10)
 			if reconcilePresence {
@@ -1472,6 +1489,10 @@ func (s *Syncer) full(
 				s.failStoppedSync(state.syncID, err)
 				return nil, fmt.Errorf("parse Gmail full-sync history cursor %q: %w", state.handoffCursor, err)
 			}
+		}
+		if err := s.store.PinSyncHandoffCursorContext(ctx, state.syncID, state.handoffCursor); err != nil {
+			s.failStoppedSync(state.syncID, err)
+			return nil, fmt.Errorf("pin Gmail handoff cursor: %w", err)
 		}
 	}
 
@@ -1673,6 +1694,11 @@ func (s *Syncer) full(
 		s.logger.Warn("full sync completed with errors",
 			"errors", state.checkpoint.ErrorsCount,
 			"history_id", historyIDStr)
+	}
+	if s.opts.InitialBackfill && state.checkpoint.ErrorsCount > 0 {
+		err := fmt.Errorf("initial backfill has %d unresolved message errors", state.checkpoint.ErrorsCount)
+		s.failStoppedSync(state.syncID, err)
+		return nil, err
 	}
 	// Complete ordinary full sync before best-effort provider maintenance;
 	// recovery remains paused and discoverable for catch-up.
