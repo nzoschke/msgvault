@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,6 +28,8 @@ var ErrPermanent4xx = vector.ErrPermanent4xx
 // Config controls an embeddings Client. The zero value is not usable; callers
 // must set Endpoint, Model, and Dimension at a minimum.
 type Config struct {
+	AuthorizationEnv         string
+	AuthorizationEndpointEnv string
 	// Endpoint is the base URL including /v1 (e.g. "http://host:8080/v1").
 	// The request path "/embeddings" is appended.
 	Endpoint string
@@ -66,6 +70,9 @@ type Client struct {
 
 // NewClient constructs a Client, applying defaults for Timeout and MaxRetries.
 func NewClient(cfg Config) *Client {
+	if cfg.AuthorizationEnv != "" {
+		cfg.RejectRedirects = true
+	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 30 * time.Second
 	}
@@ -97,7 +104,7 @@ func (c *Client) embed(ctx context.Context, role embedconfig.Role, inputs []stri
 	}
 	ctx = withEmbeddingAttemptGroup(ctx)
 	httpClient := *c.http
-	if c.cfg.BeforeRequest != nil {
+	if c.cfg.BeforeRequest != nil || c.cfg.AuthorizationEnv != "" {
 		// Consent failure ends this call, including Kit retries. Each concrete
 		// attempt still checks authorization at the transport boundary.
 		var cancel context.CancelCauseFunc
@@ -107,7 +114,13 @@ func (c *Client) embed(ctx context.Context, role embedconfig.Role, inputs []stri
 		if base == nil {
 			base = http.DefaultTransport
 		}
+		if c.cfg.AuthorizationEnv != "" {
+			base = authorizationTransport{base: base, cfg: c.cfg, cancel: cancel}
+		}
 		httpClient.Transport = beforeRequestTransport{base: base, before: func(ctx context.Context) error {
+			if c.cfg.BeforeRequest == nil {
+				return nil
+			}
 			err := c.cfg.BeforeRequest(ctx)
 			if err != nil {
 				cancel(err)
@@ -237,4 +250,28 @@ func (c *Client) EmbedDocuments(ctx context.Context, documents []DocumentInput) 
 		offset = next
 	}
 	return documentVecs, nil
+}
+
+type authorizationTransport struct {
+	base   http.RoundTripper
+	cfg    Config
+	cancel context.CancelCauseFunc
+}
+
+func (t authorizationTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	endpoint := strings.TrimRight(os.Getenv(t.cfg.AuthorizationEndpointEnv), "/")
+	authorization := os.Getenv(t.cfg.AuthorizationEnv)
+	var err error
+	if endpoint == "" || endpoint != strings.TrimRight(t.cfg.Endpoint, "/") || request.URL.String() != endpoint+"/embeddings" {
+		err = errors.New("embedding authorization is not valid for this endpoint")
+	} else if authorization == "" || strings.ContainsAny(authorization, "\r\n") {
+		err = errors.New("embedding authorization is unavailable")
+	}
+	if err != nil {
+		t.cancel(err)
+		return nil, &beforeRequestError{err: err}
+	}
+	request = request.Clone(request.Context())
+	request.Header.Set("Authorization", authorization)
+	return t.base.RoundTrip(request)
 }
