@@ -43,7 +43,8 @@ msgvault setup proxy --endpoint "$MSGVAULT_PROXY_ENDPOINT" \
 ```
 
 This fills missing settings for `text-embedding-3-small` with 1536 dimensions,
-a one-minute indexing schedule, and indexing after sync. Semantic search stays
+automatic initial index creation (`vector.embed.auto_initialize`), a one-minute
+indexing schedule, and indexing after sync. Semantic search stays
 off by default. Existing settings, including the enable switch, are preserved.
 Enable **Semantic search** in the web app's Search settings and save. The daemon
 must restart to apply the change; service managers can watch `config.toml` to

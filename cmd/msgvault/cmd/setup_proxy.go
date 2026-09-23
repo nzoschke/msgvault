@@ -47,6 +47,7 @@ func configureEmbeddingProxy(path, endpoint, authorizationEnv, endpointEnv strin
 		{Key: "vector.embeddings.model", Value: "text-embedding-3-small"},
 		{Key: "vector.embeddings.dimension", Value: 1536},
 		{Key: "vector.embeddings.max_input_chars", Value: 8000},
+		{Key: "vector.embed.auto_initialize", Value: true},
 		{Key: "vector.embed.schedule.cron", Value: "* * * * *"},
 		{Key: "vector.embed.schedule.run_after_sync", Value: true},
 	}
