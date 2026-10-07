@@ -18549,6 +18549,11 @@ paths:
           name: no-build-cache
           schema:
             type: boolean
+        - description: Emit JSON progress and sync summaries
+          in: query
+          name: json
+          schema:
+            type: boolean
         - description: Account email or display name to sync
           in: query
           name: email
@@ -18604,6 +18609,11 @@ paths:
         - description: Skip the analytics cache refresh after sync
           in: query
           name: no-build-cache
+          schema:
+            type: boolean
+        - description: Emit JSON progress and sync summaries
+          in: query
+          name: json
           schema:
             type: boolean
         - description: Account email or display name to sync

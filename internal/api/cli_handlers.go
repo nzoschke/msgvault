@@ -462,6 +462,7 @@ type CLICacheBuildEvent struct {
 }
 
 type CLISyncRequest struct {
+	JSON         bool
 	Full         bool
 	BuildCache   bool
 	NoBuildCache bool
@@ -1093,6 +1094,9 @@ func (s *Server) handleCLISyncWithMode(w http.ResponseWriter, r *http.Request, f
 
 func parseCLISyncRequest(r *http.Request, full bool) (CLISyncRequest, *apiHTTPError) {
 	values := r.URL.Query()
+	if _, present := values["query"]; present && strings.TrimSpace(values.Get("query")) == "" {
+		return CLISyncRequest{}, newAPIHTTPError(http.StatusBadRequest, "invalid_query", "query must not be empty or whitespace-only")
+	}
 	req := CLISyncRequest{
 		Full:   full,
 		Email:  values.Get("email"),
@@ -1104,6 +1108,7 @@ func parseCLISyncRequest(r *http.Request, full bool) (CLISyncRequest, *apiHTTPEr
 		name  string
 		value *bool
 	}{
+		{name: "json", value: &req.JSON},
 		{name: "build-cache", value: &req.BuildCache},
 		{name: "no-build-cache", value: &req.NoBuildCache},
 	} {
@@ -1756,7 +1761,6 @@ func cliRunCommandAllowed(args []string) bool {
 		"sync-plaud",
 		"sync-twenty",
 		"sync-discord",
-		"sync-external",
 		"sync-granola",
 		"sync-muesli",
 		"sync-notion-meetings",

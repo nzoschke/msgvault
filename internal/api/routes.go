@@ -866,6 +866,7 @@ func rawRouteParameters(operationID string) []*huma.Param {
 		return []*huma.Param{
 			queryBooleanParam("build-cache", "Build the analytics cache after sync even inside the interval"),
 			queryBooleanParam("no-build-cache", "Skip the analytics cache refresh after sync"),
+			queryBooleanParam("json", "Emit JSON progress and sync summaries"),
 			queryStringParam("email", "Account email or display name to sync", false),
 			queryIntegerParam("source_id", "Exact source ID to sync"),
 			queryRefArrayParam("folder", "IMAP folder names to include (repeatable)"),
@@ -875,6 +876,7 @@ func rawRouteParameters(operationID string) []*huma.Param {
 		return []*huma.Param{
 			queryBooleanParam("build-cache", "Build the analytics cache after sync even inside the interval"),
 			queryBooleanParam("no-build-cache", "Skip the analytics cache refresh after sync"),
+			queryBooleanParam("json", "Emit JSON progress and sync summaries"),
 			queryStringParam("email", "Account email or display name to sync", false),
 			queryIntegerParam("source_id", "Exact source ID to sync"),
 			queryStringParam("query", "Gmail search query", false),

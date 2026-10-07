@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/spf13/cobra"
+	"go.kenn.io/msgvault/internal/api"
 	"io"
 	"net"
 	"net/http"
@@ -20,33 +21,61 @@ import (
 	"go.kenn.io/msgvault/internal/store"
 )
 
-func TestSyncExternalFlagValidation(t *testing.T) {
+func TestStandardExternalFlagValidation(t *testing.T) {
 	for _, args := range [][]string{{"--query", ""}, {"--query", " \t\n"}, {"--after", "yesterday"}} {
 		t.Run(strings.Join(args, "="), func(t *testing.T) {
 			server, calls := newDaemonCLIRunnerTestServer(t, nil, `{"type":"complete"}`)
-			cmd := newSyncExternalCmd()
+			cmd := newStandardExternalTestCmd(t, false)
 			cmd.SetContext(configureRemoteDaemonForTest(t, server.URL))
 			cmd.SetOut(io.Discard)
 			cmd.SetErr(io.Discard)
-			cmd.SetArgs(append([]string{"alice@example.com", "--endpoint", "https://proxy.example.test/v1", "--credential-socket", "/tmp/token.sock"}, args...))
+			cmd.SetArgs(append([]string{"alice@example.com"}, args...))
 			require.ErrorContains(t, cmd.Execute(), args[0])
 			assert.Zero(t, calls.Load(), "validation must precede daemon work")
 		})
 	}
 }
 
-func TestSyncExternalDaemonForwarding(t *testing.T) {
+func TestStandardExternalDaemonForwarding(t *testing.T) {
 	for _, query := range []string{"from:a@example.com OR from:b@example.com", "in:anywhere rfc822msgid:fixture+abc@example.com"} {
-		cmd := newSyncExternalCmd()
-		require.NoError(t, cmd.ParseFlags([]string{"alice@example.com", "--endpoint", "https://proxy.example.test/v1", "--credential-socket", "/tmp/token.sock", "--query", query, "--after", "2025-09-23", "--include-spam-trash"}))
-		args, err := daemonCLIArgsFromCobra(cmd, cmd.Flags().Args())
-		require.NoError(t, err)
-		assert.Equal(t, []string{"sync-external", "--after=2025-09-23", "--credential-socket=/tmp/token.sock", "--endpoint=https://proxy.example.test/v1", "--include-spam-trash", "--query=" + query, "alice@example.com"}, args)
+		args := cliSyncSubprocessArgs(api.CLISyncRequest{Full: true, JSON: true, Email: "alice@example.com", Query: query, After: "2025-09-23", Before: "2025-09-25", Limit: 3, NoResume: true})
+		cmd := newStandardExternalTestCmd(t, false)
+		require.NoError(t, cmd.ParseFlags(args[1:]))
+		assert.Equal(t, query, syncQuery)
+		assert.Equal(t, "2025-09-23", syncAfter)
+		assert.Equal(t, "2025-09-25", syncBefore)
+		assert.Equal(t, 3, syncLimit)
+		assert.True(t, syncNoResume)
+		assert.True(t, syncJSON)
 	}
 }
 
+func newStandardExternalTestCmd(t *testing.T, incremental bool) *cobra.Command {
+	oldQuery, oldAfter, oldBefore, oldNoResume, oldJSON, oldLimit := syncQuery, syncAfter, syncBefore, syncNoResume, syncJSON, syncLimit
+	t.Cleanup(func() {
+		syncQuery, syncAfter, syncBefore, syncNoResume, syncJSON, syncLimit = oldQuery, oldAfter, oldBefore, oldNoResume, oldJSON, oldLimit
+	})
+	syncQuery, syncAfter, syncBefore = "", "", ""
+	syncNoResume, syncJSON, syncLimit = false, false, 0
+	run := syncFullCmd.RunE
+	name := "sync-full"
+	if incremental {
+		run = syncIncrementalCmd.RunE
+		name = "sync"
+	}
+	cmd := &cobra.Command{Use: name, Args: cobra.MaximumNArgs(1), RunE: run}
+	cmd.Flags().StringVar(&syncQuery, "query", "", "")
+	cmd.Flags().StringVar(&syncAfter, "after", "", "")
+	cmd.Flags().StringVar(&syncBefore, "before", "", "")
+	cmd.Flags().BoolVar(&syncNoResume, "noresume", false, "")
+	cmd.Flags().BoolVar(&syncJSON, "json", false, "")
+	cmd.Flags().IntVar(&syncLimit, "limit", 0, "")
+	cmd.Flags().Int64("source-id", 0, "")
+	return addManualSyncCacheFlags(cmd)
+}
+
 // Exercise the real external client, command routing, ingestion and cache builder.
-func TestSyncExternalBackfill(t *testing.T) {
+func TestStandardExternalBackfill(t *testing.T) {
 	for _, tt := range []struct {
 		name, cursor, query, after, effective string
 		spam, incremental, failure            bool
@@ -59,7 +88,7 @@ func TestSyncExternalBackfill(t *testing.T) {
 		{name: "partial failure", cursor: "123", query: "from:sender@example.com", effective: "from:sender@example.com", failure: true},
 		{name: "date only initial", after: "2025-09-23", effective: "after:2025-09-23"},
 		{name: "unfiltered initial"},
-		{name: "date only incremental", cursor: "123", after: "2025-09-23", incremental: true},
+		{name: "incremental", cursor: "123", incremental: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			markDaemonCLISubprocessForTest(t)
@@ -128,20 +157,19 @@ func TestSyncExternalBackfill(t *testing.T) {
 			}))
 			t.Cleanup(upstream.Close)
 			run := func() error {
-				cmd := newSyncExternalCmd()
+				cmd := newStandardExternalTestCmd(t, tt.incremental)
 				cmd.SetContext(withStoreResolverConfig(t, cfg))
-				cmd.SetOut(&bytes.Buffer{})
+				cmd.SetOut(io.Discard)
 				cmd.SetErr(io.Discard)
-				args := []string{"alice@example.com", "--endpoint", upstream.URL + "/v1", "--credential-socket", "token.sock"}
+				cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialSocket: "token.sock", IncludeSpamTrash: tt.spam}
+				args := []string{"alice@example.com", "--build-cache", "--json"}
 				if tt.query != "" {
 					args = append(args, "--query", tt.query)
 				}
 				if tt.after != "" {
 					args = append(args, "--after", tt.after)
 				}
-				if tt.spam {
-					args = append(args, "--include-spam-trash")
-				}
+
 				cmd.SetArgs(args)
 				return cmd.Execute()
 			}
@@ -158,7 +186,7 @@ func TestSyncExternalBackfill(t *testing.T) {
 			}
 			got, err := st.GetSourceByID(source.ID)
 			require.NoError(t, err)
-			if tt.query != "" {
+			if tt.query != "" || tt.after != "" {
 				assert.Equal(t, originalCursor, got.SyncCursor)
 			} else {
 				assert.Equal(t, "999", got.SyncCursor.String)
@@ -188,9 +216,51 @@ func TestSyncExternalBackfill(t *testing.T) {
 				content, err := os.ReadFile(filepath.Join(cfg.AttachmentsDir(), attachments[0].StoragePath))
 				require.NoError(t, err)
 				assert.Contains(t, string(content), "Attachment content")
-				cached := cacheNeedsBuild(cfg.DatabaseDSN(), cfg.AnalyticsDir())
-				assert.False(t, cached.NeedsBuild, cached.Reason)
+				// Cache refresh is queued by the parent daemon; checked in integration.
 			}
 		})
 	}
+}
+
+func TestSetupExternalGmail(t *testing.T) {
+	cfg := config.NewDefaultConfig()
+	cfg.HomeDir = t.TempDir()
+	require.NoError(t, os.WriteFile(cfg.ConfigFilePath(), []byte("# keep operator settings\n[vector]\nenabled = false\n"), 0600))
+	cmd := newSetupExternalGmailCmd()
+	cmd.SetContext(withStoreResolverConfig(t, cfg))
+	cmd.SetArgs([]string{"--endpoint", "https://proxy.example.test/v1", "--credential-socket", filepath.Join(cfg.HomeDir, "token.sock"), "--include-spam-trash"})
+	require.NoError(t, cmd.Execute())
+	loaded, err := config.Load(cfg.ConfigFilePath(), cfg.HomeDir)
+	require.NoError(t, err)
+	require.NotNil(t, loaded.Gmail.External)
+	assert.Equal(t, "https://proxy.example.test/v1", loaded.Gmail.External.Endpoint)
+	assert.True(t, loaded.Gmail.External.IncludeSpamTrash)
+	assert.False(t, loaded.Vector.Enabled)
+	data, err := os.ReadFile(cfg.ConfigFilePath())
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "# keep operator settings")
+	assert.NotContains(t, string(data), "access_token")
+}
+
+func TestExternalSharedClientRejectsMismatchedAccount(t *testing.T) {
+	t.Chdir(t.TempDir())
+	listener, err := net.Listen("unix", "token.sock")
+	require.NoError(t, err)
+	credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"access_token":"fixture-token"}`)
+	})}
+	go func() { _ = credentials.Serve(listener) }()
+	t.Cleanup(func() { _ = credentials.Close() })
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"emailAddress":"other@example.com","historyId":"123"}`)
+	}))
+	defer upstream.Close()
+	cfg := config.NewDefaultConfig()
+	cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialSocket: "token.sock"}
+	ctx := withStoreResolverConfig(t, cfg)
+	src := &store.Source{SourceType: "gmail", Identifier: "alice@example.com"}
+	_, err = buildAPIClient(ctx, src, nil, nil)
+	require.ErrorContains(t, err, "profile does not match")
+	_, _, err = newDaemonGmailClient(ctx, src.Identifier, src, nil, invocationFromContext(ctx))
+	require.ErrorContains(t, err, "profile does not match")
 }
