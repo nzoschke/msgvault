@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -42,6 +43,11 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			if !isDaemonCLISubprocess() {
 				return runDaemonCLICommandHTTPFromCobraWithLocalFiles(cmd, args, nil)
 			}
+			state := invocationFromCommand(cmd)
+			if state == nil || state.cfg == nil || state.logger == nil {
+				return errors.New("configuration is unavailable")
+			}
+			cfg, logger := state.cfg, state.logger
 			in.Account = args[0]
 			ctx, cancel := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
@@ -57,7 +63,7 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			if !strings.EqualFold(profile.EmailAddress, in.Account) {
 				return errors.New("external account profile does not match requested mailbox")
 			}
-			st, cleanup, err := openWritableStoreAndInitForIngest()
+			st, cleanup, err := openWritableStoreAndInitForIngestInvocation(state)
 			if err != nil {
 				return err
 			}
@@ -75,7 +81,7 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 					opts.Query = "after:" + after
 				}
 			}
-			syncer := msgsync.New(client, st, opts).WithLogger(logger).WithProgress(&externalProgress{output: cmd.OutOrStdout()})
+			syncer := msgsync.New(client, st, opts).WithLogger(logger).WithProgress(&externalProgress{output: cmd.OutOrStdout(), logger: logger})
 			var summary *gmail.SyncSummary
 			if !source.SyncCursor.Valid || source.SyncCursor.String == "" {
 				summary, err = syncer.Full(ctx, in.Account)
@@ -91,7 +97,7 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			if summary == nil || summary.Errors > 0 {
 				return errors.New("external sync has unresolved message errors")
 			}
-			if err := rebuildCacheAfterWrite(cfg.DatabaseDSN()); err != nil {
+			if err := rebuildCacheAfterWrite(cfg.DatabaseDSN(), state); err != nil {
 				return err
 			}
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(externalResult{BytesDownloaded: summary.BytesDownloaded, Errors: summary.Errors, FinalHistoryID: summary.FinalHistoryID, MessagesAdded: summary.MessagesAdded, MessagesFound: summary.MessagesFound, MessagesSkipped: summary.MessagesSkipped, MessagesUpdated: summary.MessagesUpdated, SyncRunID: summary.SyncRunID})
@@ -109,6 +115,7 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 func init() { rootCmd.AddCommand(newSyncExternalCmd()) }
 
 type externalProgress struct {
+	logger *slog.Logger
 	mu     sync.Mutex
 	output io.Writer
 }
@@ -136,7 +143,7 @@ func (p *externalProgress) emit(value externalProgressEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err := json.NewEncoder(p.output).Encode(value); err != nil {
-		logger.Warn("write external sync progress", "error", err)
+		p.logger.Warn("write external sync progress", "error", err)
 	}
 }
 func (p *externalProgress) OnStart(total int64) {
