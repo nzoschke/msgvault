@@ -42,6 +42,7 @@ type CLIStats struct {
 type CLICacheStats = cacheops.CacheStats
 
 type CLISyncRequest struct {
+	JSON         bool
 	Full         bool
 	BuildCache   bool
 	NoBuildCache bool
@@ -448,6 +449,7 @@ func (c *Client) RunCLISync(
 		path = "/api/v1/cli/sync-full"
 		return c.runCLIStream(ctx, path, "sync", &generated.SyncFullCLIRequestOptions{
 			Query: &generated.SyncFullCLIQuery{
+				JSON:         optionalBool(req.JSON),
 				BuildCache:   optionalBool(req.BuildCache),
 				NoBuildCache: optionalBool(req.NoBuildCache),
 				Email:        optionalString(req.Email),
@@ -464,6 +466,7 @@ func (c *Client) RunCLISync(
 	}
 	return c.runCLIStream(ctx, path, "sync", &generated.SyncCLIRequestOptions{
 		Query: &generated.SyncCLIQuery{
+			JSON:         optionalBool(req.JSON),
 			BuildCache:   optionalBool(req.BuildCache),
 			NoBuildCache: optionalBool(req.NoBuildCache),
 			Email:        optionalString(req.Email),
