@@ -52,6 +52,10 @@ type Options struct {
 	// Query is an optional Gmail search query (e.g., "before:2020/01/01")
 	Query string
 
+	// CheckpointScope distinguishes listing options outside Query when resuming.
+	// Empty preserves the default checkpoint identity.
+	CheckpointScope string
+
 	// NoResume forces a fresh sync even if a checkpoint exists
 	NoResume bool
 
@@ -496,6 +500,9 @@ func (s *Syncer) fullSyncRequestFingerprint() string {
 	)
 	if s.opts.InitialBackfill {
 		request = "initial-backfill:v1\x00" + request
+	}
+	if s.opts.CheckpointScope != "" {
+		request += "\x00scope:" + s.opts.CheckpointScope
 	}
 	version := "full:v1"
 	if s.opts.SourceType == "" || s.opts.SourceType == sourceTypeGmail {
