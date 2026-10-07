@@ -23,7 +23,7 @@ CGO_ENABLED=1 GOWORK=off go build -tags 'fts5 sqlite_vec' -trimpath -buildvcs=fa
   -ldflags "-s -w -X go.kenn.io/msgvault/cmd/msgvault/cmd.Version=$version -X go.kenn.io/msgvault/cmd/msgvault/cmd.Commit=$commit -X go.kenn.io/msgvault/cmd/msgvault/cmd.BuildDate=$build_date -X go.kenn.io/msgvault/internal/peoplesweep.codexBridgeSHA256=$bridge_digest" \
   -o "$build_dir/msgvault" ./cmd/msgvault
 node scripts/check-web-assets.mjs --binary "$build_dir/msgvault"
-"$build_dir/msgvault" sync-external --help >/dev/null
+"$build_dir/msgvault" sync-full --help >/dev/null
 asset="msgvault_${version}_linux_${architecture}.tar.gz"
 tar --sort=name --mtime="@$build_epoch" --owner=0 --group=0 --numeric-owner -C "$build_dir" -czf "$output/$asset" msgvault msgvault-codex-bridge
 (cd "$output" && sha256sum "$asset" > "$asset.sha256")

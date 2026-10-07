@@ -12,6 +12,10 @@ export type SyncFullCLIParams = {
    */
   "no-build-cache"?: boolean;
   /**
+   * Emit JSON progress and sync summaries
+   */
+  json?: boolean;
+  /**
    * Account email or display name to sync
    */
   email?: string;

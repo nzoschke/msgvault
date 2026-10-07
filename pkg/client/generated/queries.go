@@ -348,6 +348,9 @@ type SyncCLIQuery struct {
 	// NoBuildCache Skip the analytics cache refresh after sync
 	NoBuildCache *bool `json:"no-build-cache,omitempty"`
 
+	// JSON Emit JSON progress and sync summaries
+	JSON *bool `json:"json,omitempty"`
+
 	// Email Account email or display name to sync
 	Email *string `json:"email,omitempty"`
 
@@ -367,6 +370,9 @@ type SyncFullCLIQuery struct {
 
 	// NoBuildCache Skip the analytics cache refresh after sync
 	NoBuildCache *bool `json:"no-build-cache,omitempty"`
+
+	// JSON Emit JSON progress and sync summaries
+	JSON *bool `json:"json,omitempty"`
 
 	// Email Account email or display name to sync
 	Email *string `json:"email,omitempty"`
