@@ -20,7 +20,7 @@ import (
 
 func newSyncExternalCmd() *cobra.Command {
 	var in gmail.ExternalIn
-	var after string
+	var after, query string
 	command := &cobra.Command{
 		Use:   "sync-external email",
 		Short: "Back up Gmail through an external credential provider",
@@ -32,9 +32,18 @@ subsequent invocations use incremental sync. Output includes JSON progress
 and a terminal sync summary. Interrupted or incomplete runs exit nonzero.
 Use --after YYYY-MM-DD to bound the initial backfill. Keep the same date
 when retrying an interrupted backfill. Accounts with an existing history
-cursor continue incrementally; --after does not filter incremental changes.`,
+cursor continue incrementally; --after does not filter incremental changes.
+Use --query for a filtered backfill regardless of the existing history cursor.
+It fetches matching messages, not entire conversations, and preserves the cursor
+(or leaves it unset). Combine --query with --after to AND the date with the
+whole query. Keep the same query, date, and spam/trash option across retries.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			queryBackfill := cmd.Flags().Changed("query")
+			query = strings.TrimSpace(query)
+			if queryBackfill && query == "" {
+				return errors.New("--query must not be empty or whitespace-only")
+			}
 			if after != "" {
 				if _, err := time.Parse(time.DateOnly, after); err != nil {
 					return fmt.Errorf("invalid --after date %q (expected YYYY-MM-DD): %w", after, err)
@@ -75,7 +84,16 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			opts := msgsync.DefaultOptions()
 			opts.AttachmentsDir = cfg.AttachmentsDir()
 			opts.BatchSize = 2
-			if !source.SyncCursor.Valid || source.SyncCursor.String == "" {
+			hasCursor := source.SyncCursor.Valid && source.SyncCursor.String != ""
+			if queryBackfill {
+				opts.Query = query
+				if after != "" {
+					opts.Query = "(" + query + ") after:" + after
+				}
+				if in.IncludeSpamTrash {
+					opts.CheckpointScope = "external:include-spam-trash"
+				}
+			} else if !hasCursor {
 				opts.InitialBackfill = true
 				if after != "" {
 					opts.Query = "after:" + after
@@ -83,7 +101,7 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			}
 			syncer := msgsync.New(client, st, opts).WithLogger(logger).WithProgress(&externalProgress{output: cmd.OutOrStdout(), logger: logger})
 			var summary *gmail.SyncSummary
-			if !source.SyncCursor.Valid || source.SyncCursor.String == "" {
+			if queryBackfill || !hasCursor {
 				summary, err = syncer.Full(ctx, in.Account)
 			} else {
 				summary, err = syncer.IncrementalWithHistoryRecovery(ctx, source, nil)
@@ -103,7 +121,8 @@ cursor continue incrementally; --after does not filter incremental changes.`,
 			return json.NewEncoder(cmd.OutOrStdout()).Encode(externalResult{BytesDownloaded: summary.BytesDownloaded, Errors: summary.Errors, FinalHistoryID: summary.FinalHistoryID, MessagesAdded: summary.MessagesAdded, MessagesFound: summary.MessagesFound, MessagesSkipped: summary.MessagesSkipped, MessagesUpdated: summary.MessagesUpdated, SyncRunID: summary.SyncRunID})
 		},
 	}
-	command.Flags().StringVar(&after, "after", "", "Only backfill messages after this date (YYYY-MM-DD); subsequent syncs are incremental")
+	command.Flags().StringVar(&query, "query", "", "Backfill matching Gmail messages while preserving the incremental cursor")
+	command.Flags().StringVar(&after, "after", "", "Only backfill messages after this date (YYYY-MM-DD); ANDed with --query, otherwise initial sync only")
 	command.Flags().StringVar(&in.Endpoint, "endpoint", "", "Gmail-compatible API base URL ending in /v1")
 	command.Flags().StringVar(&in.CredentialSocket, "credential-socket", "", "Unix socket providing GET /token?account=email credentials")
 	command.Flags().BoolVar(&in.IncludeSpamTrash, "include-spam-trash", false, "Include Spam and Trash in the full backup")

@@ -69,6 +69,8 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/build-vault-release.sh "$RELEASE_VERSION"
+          GOWORK=off go test -tags 'fts5 sqlite_vec' ./cmd/msgvault/cmd ./internal/sync ./internal/gmail \
+            -run 'Test(SyncExternal|QueryBackfill|External|InitialBackfill|Full.*(Cancel|Resume))' -count=1
           mkdir dist/unpacked
           tar -xzf dist/*.tar.gz -C dist/unpacked
           scripts/smoke-vault-release.sh dist/unpacked/msgvault
