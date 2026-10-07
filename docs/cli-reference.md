@@ -693,6 +693,39 @@ present. The date filter does not constrain incremental changes or the full
 mailbox recovery used when Gmail history expires. Existing accounts with a
 history cursor continue incrementally without repeating their initial backfill.
 
+For a focused backfill into an existing archive, supply a nonempty Gmail search
+query. This always runs filtered ingestion, even when a history cursor exists:
+
+```bash
+msgvault sync-external account@example.com \
+  --endpoint https://proxy.example.test/v1 \
+  --credential-socket /path/to/token.sock \
+  --query 'from:someone@example.com'
+
+msgvault sync-external account@example.com \
+  --endpoint https://proxy.example.test/v1 \
+  --credential-socket /path/to/token.sock \
+  --query 'from:alice@example.com OR from:bob@example.com' --after 2025-09-23
+```
+
+`--query` fetches matching messages, **not entire conversations**, through the
+normal body, raw MIME, attachment, and derived-cache pipeline. It preserves the
+incremental history cursor exactly; if the cursor is unset, it stays unset.
+Messages absent from the search are not marked deleted. Successful retries do
+not duplicate messages. Empty or whitespace-only queries are rejected.
+
+With `--after`, the effective search is `(<query>) after:YYYY-MM-DD`, so the date
+applies to the whole query, including OR expressions. Interrupted runs resume
+only matching checkpoints: keep the same query, date, and `--include-spam-trash`
+setting. Changing any of these starts a new listing. Message failures are
+reported as a nonzero exit and retried on the next run.
+
+Omit `--query` to return to normal initial-backfill or incremental behavior.
+A query backfill never establishes or advances the incremental cursor and does
+not trigger unfiltered history recovery. `--include-spam-trash` works as for a
+normal full listing; Gmail search operators such as `in:anywhere` retain their
+usual meaning.
+
 ---
 
 ## sync

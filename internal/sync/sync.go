@@ -50,6 +50,10 @@ type Options struct {
 	// Query is an optional Gmail search query (e.g., "before:2020/01/01")
 	Query string
 
+	// CheckpointScope distinguishes listing options outside Query when resuming.
+	// Empty preserves the default checkpoint identity.
+	CheckpointScope string
+
 	// NoResume forces a fresh sync even if a checkpoint exists
 	NoResume bool
 
@@ -468,7 +472,7 @@ func (s *Syncer) fullCheckpointMatchesRequest(
 	// and limited requests still require an exact fingerprint. Remove this
 	// fallback when the minimum supported archive version is newer than v0.19.3.
 	return !s.opts.InitialBackfill && (s.opts.SourceType == "" || s.opts.SourceType == sourceTypeGmail) &&
-		s.opts.Query == "" && s.opts.Limit == 0
+		s.opts.Query == "" && s.opts.Limit == 0 && s.opts.CheckpointScope == ""
 }
 
 func isPinnedHistoryRecovery(run *store.SyncRun) bool {
@@ -483,6 +487,9 @@ func (s *Syncer) fullSyncRequestFingerprint() string {
 	)
 	if s.opts.InitialBackfill {
 		request = "initial-backfill:v1\x00" + request
+	}
+	if s.opts.CheckpointScope != "" {
+		request += "\x00scope:" + s.opts.CheckpointScope
 	}
 	return fmt.Sprintf("full:v1:%x", sha256.Sum256([]byte(request)))
 }
