@@ -2791,3 +2791,23 @@ identifier_type = "example"
 ```
 
 Each rule requires one mailbox address, a header name, and an identifier type. A missing, repeated, or empty header leaves the message attributed to its From address. Rules apply to new Gmail, IMAP, and Microsoft mail, and mbox, eml, emlx, and PST imports. GitHub bot handles are supported. The recorded From address stays visible on messages. Attribution for already archived messages will be handled separately.
+
+## External Gmail credentials
+
+Configure a shared credential provider with `msgvault setup external-gmail`,
+or add this table to `config.toml`:
+
+```toml
+[gmail.external]
+endpoint = "https://proxy.example.test/v1"
+credential_socket = "/path/to/token.sock"
+include_spam_trash = true
+```
+
+The provider authorizes each requested Gmail account. When configured, standard
+Gmail sync, verification, repair, account registration, and daemon jobs use it
+instead of Google OAuth files. Restart a running daemon after changing these
+settings. Remove the table to return to ordinary OAuth configuration. Never put
+access tokens in this table. Protect the Unix socket and use an absolute path.
+See [external Gmail commands](cli-reference.md#external-gmail-credentials) for
+initial backup, incremental sync, and cursor-preserving backfill examples.

@@ -1861,7 +1861,7 @@ func hasServeOAuthConfig(c *config.Config) bool {
 	if c == nil {
 		return false
 	}
-	return c.OAuth.HasAnyConfig() || c.Microsoft.ClientID != ""
+	return c.Gmail.External != nil || c.OAuth.HasAnyConfig() || c.Microsoft.ClientID != ""
 }
 
 func effectiveDaemonIdleTimeout(c *config.Config, logger *slog.Logger) time.Duration {
@@ -2467,6 +2467,9 @@ func emitFolderArgs(args []string, flag string, values []string) []string {
 func cliSyncSubprocessArgs(req api.CLISyncRequest) []string {
 	if req.Full {
 		args := []string{"sync-full"}
+		if req.JSON {
+			args = append(args, "--json")
+		}
 		if req.BuildCache {
 			args = append(args, "--build-cache")
 		}
@@ -2502,6 +2505,9 @@ func cliSyncSubprocessArgs(req api.CLISyncRequest) []string {
 		return args
 	}
 	args := []string{syncIncrementalCmd.Name()}
+	if req.JSON {
+		args = append(args, "--json")
+	}
 	if req.BuildCache {
 		args = append(args, "--build-cache")
 	}
@@ -4507,6 +4513,10 @@ func newDaemonGmailClient(
 	}
 	cfg := state.cfg
 	logger := state.logger
+	if cfg.Gmail.External != nil {
+		client, err := externalGmailClient(ctx, email, state)
+		return client, false, err
+	}
 	appName := ""
 	if src != nil {
 		appName = sourceOAuthApp(src)
