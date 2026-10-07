@@ -199,7 +199,7 @@ func runVerifyLocal(cmd *cobra.Command, args []string) error {
 		appName = sourceOAuthApp(src)
 	}
 
-	if !cfg.OAuth.HasAnyConfig() {
+	if cfg.Gmail.External == nil && !cfg.OAuth.HasAnyConfig() {
 		return errOAuthNotConfigured(cfg)
 	}
 
@@ -219,40 +219,48 @@ func runVerifyLocal(cmd *cobra.Command, args []string) error {
 	// Resolve a Gmail token source. Service-account-bound sources mint
 	// a fresh JWT-based token on demand; browser-OAuth sources reuse
 	// the stored refresh token (and may prompt for re-auth in TTY).
-	var tokenSource oauth2.TokenSource
-	if saKeyPath := cfg.OAuth.ServiceAccountKeyFor(appName); saKeyPath != "" {
-		saMgr, saErr := oauth.NewServiceAccountManager(saKeyPath, oauth.Scopes)
-		if saErr != nil {
-			return fmt.Errorf("service account: %w", saErr)
-		}
-		tokenSource, err = saMgr.TokenSource(ctx, email)
-		if err != nil {
-			return fmt.Errorf("service account token for %s: %w", email, err)
-		}
-	} else {
-		clientSecretsPath, secretsErr := cfg.OAuth.ClientSecretsFor(appName)
-		if secretsErr != nil {
-			return secretsErr
-		}
-		oauthMgr, mgrErr := oauth.NewManager(clientSecretsPath, cfg.TokensDir(), logger)
-		if mgrErr != nil {
-			return wrapOAuthError(fmt.Errorf("create oauth manager: %w", mgrErr), cfg)
-		}
-		// Machine-readable mode must not enter an interactive OAuth
-		// flow that writes prompts to stdout before the JSON object.
-		interactive := false
-		if !verifyJSON {
-			interactive = isatty.IsTerminal(os.Stdin.Fd()) ||
-				isatty.IsCygwinTerminal(os.Stdin.Fd())
-		}
-		tokenSource, err = getTokenSourceWithReauth(ctx, oauthMgr, email, interactive, gmailReauthHint)
+	var client *gmail.Client
+	if cfg.Gmail.External != nil {
+		client, err = externalGmailClient(ctx, email, state)
 		if err != nil {
 			return err
 		}
-	}
+	} else {
+		var tokenSource oauth2.TokenSource
+		if saKeyPath := cfg.OAuth.ServiceAccountKeyFor(appName); saKeyPath != "" {
+			saMgr, saErr := oauth.NewServiceAccountManager(saKeyPath, oauth.Scopes)
+			if saErr != nil {
+				return fmt.Errorf("service account: %w", saErr)
+			}
+			tokenSource, err = saMgr.TokenSource(ctx, email)
+			if err != nil {
+				return fmt.Errorf("service account token for %s: %w", email, err)
+			}
+		} else {
+			clientSecretsPath, secretsErr := cfg.OAuth.ClientSecretsFor(appName)
+			if secretsErr != nil {
+				return secretsErr
+			}
+			oauthMgr, mgrErr := oauth.NewManager(clientSecretsPath, cfg.TokensDir(), logger)
+			if mgrErr != nil {
+				return wrapOAuthError(fmt.Errorf("create oauth manager: %w", mgrErr), cfg)
+			}
+			// Machine-readable mode must not enter an interactive OAuth
+			// flow that writes prompts to stdout before the JSON object.
+			interactive := false
+			if !verifyJSON {
+				interactive = isatty.IsTerminal(os.Stdin.Fd()) ||
+					isatty.IsCygwinTerminal(os.Stdin.Fd())
+			}
+			tokenSource, err = getTokenSourceWithReauth(ctx, oauthMgr, email, interactive, gmailReauthHint)
+			if err != nil {
+				return err
+			}
+		}
 
-	// Create Gmail client (no rate limiter needed for single call)
-	client := gmail.NewClient(tokenSource, gmail.WithLogger(logger))
+		// Create Gmail client (no rate limiter needed for single call)
+		client = gmail.NewClient(tokenSource, gmail.WithLogger(logger))
+	}
 	defer func() { _ = client.Close() }()
 
 	// Get Gmail profile

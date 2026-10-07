@@ -44,8 +44,10 @@ var errGmailSourceNotFound = errors.New("gmail source not found")
 
 var addAccountCmd = &cobra.Command{
 	Use:   addAccountUse,
-	Short: "Add a Gmail account via OAuth",
+	Short: "Add a Gmail account with configured credentials",
 	Long: `Add a Gmail account by completing the OAuth2 authorization flow.
+With [gmail.external] configured, verify and register the account through the
+external provider without an OAuth flow or token file. Provider access is read-only.
 
 By default, opens a browser for authorization. Use --headless to see instructions
 for authorizing on headless servers (Google does not support Gmail in device flow).
@@ -313,6 +315,9 @@ func preflightAddAccountAuthorize(cmd *cobra.Command, email string) (bool, error
 		return false, errors.New("configuration is unavailable")
 	}
 	cfg := state.cfg
+	if cfg.Gmail.External != nil {
+		return false, nil
+	}
 	if IsRemoteMode(state) {
 		// Tokens live on the remote host; authorization must happen there.
 		return false, nil
@@ -405,6 +410,9 @@ func runAddAccountLocal(cmd *cobra.Command, args []string) error {
 	}
 	cfg := state.cfg
 	email := args[0]
+	if cfg.Gmail.External != nil {
+		return addExternalGmailAccount(cmd, email, state)
+	}
 
 	if headless && forceReauth {
 		return usageErr(cmd, errors.New("--headless and --force cannot be used together: --force requires browser-based OAuth which is not available in headless mode"))

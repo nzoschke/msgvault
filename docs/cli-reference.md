@@ -647,7 +647,8 @@ msgvault sync-full [account] [flags]
 | `--limit N` | Maximum messages to download |
 | `--after YYYY-MM-DD` | Only messages after this date |
 | `--before YYYY-MM-DD` | Only messages before this date |
-| `--query` | Gmail search query filter |
+| `--query` | Gmail search query filter; preserves the incremental cursor |
+| `--json` | JSON progress and per-account sync summaries |
 | `--noresume` | Ignore checkpoints, start fresh |
 | `--folder NAME` | Scan this IMAP folder (repeatable) |
 | `--skip-folder NAME` | Skip this IMAP folder (repeatable) |
@@ -672,59 +673,61 @@ under [`sync`](#sync).
 
 ---
 
-## sync-external
+## External Gmail credentials
 
-Back up a Gmail account through a Gmail-compatible endpoint and a Unix socket
-credential provider. The socket supplies short-lived access tokens in memory.
-
-```bash
-msgvault sync-external account@example.com --endpoint https://proxy.example.test/v1 --credential-socket /path/to/token.sock --after 2025-09-23
-```
-
-`--after YYYY-MM-DD` bounds the initial backfill using a Gmail date query.
-Omit it to backfill all mail. Keep the same date across retries so saved
-pagination checkpoints remain valid. `--include-spam-trash` includes those
-folders in the listing.
-
-The initial backfill saves its starting history ID across interruptions and
-establishes an incremental cursor only after completing without message errors.
-Later invocations use incremental sync, including when `--after` is still
-present. The date filter does not constrain incremental changes or the full
-mailbox recovery used when Gmail history expires. Existing accounts with a
-history cursor continue incrementally without repeating their initial backfill.
-
-For a focused backfill into an existing archive, supply a nonempty Gmail search
-query. This always runs filtered ingestion, even when a history cursor exists:
+Use the standard Gmail commands with an external credential provider:
 
 ```bash
-msgvault sync-external account@example.com \
-  --endpoint https://proxy.example.test/v1 \
-  --credential-socket /path/to/token.sock \
-  --query 'from:someone@example.com'
-
-msgvault sync-external account@example.com \
-  --endpoint https://proxy.example.test/v1 \
-  --credential-socket /path/to/token.sock \
-  --query 'from:alice@example.com OR from:bob@example.com' --after 2025-09-23
+msgvault setup external-gmail --endpoint https://proxy.example.test/v1 \
+  --credential-socket /path/to/token.sock --include-spam-trash
+# Restart a running daemon after changing the provider.
+msgvault add-account account@example.com
+msgvault sync account@example.com --json
+msgvault sync-full account@example.com \
+  --query 'from:alice@example.com OR from:bob@example.com' \
+  --after 2025-09-23 --before 2025-09-25 --limit 100 --json
+msgvault verify account@example.com --json
+msgvault repair-message 123
 ```
 
-`--query` fetches matching messages, **not entire conversations**, through the
-normal body, raw MIME, attachment, and derived-cache pipeline. It preserves the
-incremental history cursor exactly; if the cursor is unset, it stays unset.
-Messages absent from the search are not marked deleted. Successful retries do
-not duplicate messages. Empty or whitespace-only queries are rejected.
+The provider resolves each account and supplies access tokens in memory through
+`GET /token?account=email`, returning `{"access_token":"..."}`. Authentication
+failures request `refresh=true`. The endpoint must use HTTPS (loopback HTTP is
+allowed for testing). The socket must be protected and accessible to the daemon.
+Configuration contains only the endpoint, socket path, and listing policy.
+See [configuration](configuration.md#external-gmail-credentials).
 
-With `--after`, the effective search is `(<query>) after:YYYY-MM-DD`, so the date
-applies to the whole query, including OR expressions. Interrupted runs resume
-only matching checkpoints: keep the same query, date, and `--include-spam-trash`
-setting. Changing any of these starts a new listing. Message failures are
-reported as a nonzero exit and retried on the next run.
+This provider replaces Gmail OAuth for the archive. `add-account` verifies the
+mailbox and registers it without downloading mail. `sync ACCOUNT` performs an
+initial full backup if no history cursor exists, then uses incremental history
+on later runs. A successful initial backup establishes the cursor; interrupted
+or incomplete initial backups keep it unset. An expired history cursor triggers
+the normal complete mailbox reconciliation.
 
-Omit `--query` to return to normal initial-backfill or incremental behavior.
-A query backfill never establishes or advances the incremental cursor and does
-not trigger unfiltered history recovery. `--include-spam-trash` works as for a
-normal full listing; Gmail search operators such as `in:anywhere` retain their
-usual meaning.
+`sync-full --query` always performs a filtered backfill. Date and limit flags
+also select partial results. Filtered runs preserve the incremental cursor
+exactly, including an unset cursor, and do not trigger history recovery. An
+explicit empty or whitespace-only query is rejected. A query combined with dates
+becomes `(<query>) after:YYYY-MM-DD before:YYYY-MM-DD`, preserving OR semantics.
+Gmail search returns matching messages, **not entire conversations**. Missing
+results never imply provider deletions, and successful repeats do not duplicate
+messages. The normal pipeline stores bodies, raw MIME, and attachments; the
+parent daemon schedules derived-cache refreshes according to the cache flags.
+
+Keep the query, dates, limit, and configured `include_spam_trash` setting the same
+to resume a checkpoint. Different filters start a new listing. `--noresume`
+starts a fresh listing. Failed message fetches and cancellation exit nonzero.
+
+`sync` and `sync-full` block until ingestion finishes. `--json` emits progress
+and a per-account terminal summary with `sync_run_id` and counts. The reported
+`final_history_id` is the provider's observed history ID, not necessarily the
+stored incremental cursor. Cache refresh is a separate daemon job. Runs do not
+retain a complete result set of every matching message.
+
+External transport permits mailbox reads only. Provider writes and additional
+OAuth grants remain controlled by the external provider; msgvault cannot enable
+them. Local search, SQL, show, and export commands work without Gmail credentials.
+The former `sync-external` command has been removed; use the commands above.
 
 ---
 

@@ -41,7 +41,12 @@ var syncFullCmd = &cobra.Command{
 	Long: `Perform a full synchronization of a Gmail account.
 
 Downloads all messages matching the query (or all messages if no query).
-Supports resumption from interruption - just run again to continue.
+Supports resumption from interruption - just run again with the same filters.
+Query, date, and limit filters preserve the incremental cursor, including an
+unset cursor. Gmail search fetches matching messages, not whole conversations.
+Dates are ANDed with the whole query, including OR expressions. Empty queries
+are rejected. Use --json for progress events and per-account summaries.
+Cache refresh runs as a separate daemon job.
 
 If no email is specified, syncs all configured accounts sequentially.
 
@@ -68,6 +73,9 @@ Examples:
 }
 
 func validateSyncFullFlags(cmd *cobra.Command) error {
+	if cmd.Flags().Changed("query") && strings.TrimSpace(syncQuery) == "" {
+		return usageErr(cmd, errors.New("--query must not be empty or whitespace-only"))
+	}
 	if syncLimit < 0 {
 		return usageErr(cmd, errors.New("--limit must be a non-negative number"))
 	}
@@ -85,6 +93,7 @@ func validateSyncFullFlags(cmd *cobra.Command) error {
 }
 
 func runSyncFullLocal(cmd *cobra.Command, args []string) error {
+	syncResults = nil
 	state := invocationFromCommand(cmd)
 	if state == nil || state.cfg == nil || state.logger == nil {
 		return errors.New("configuration is unavailable")
@@ -148,20 +157,20 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 		for _, src := range allSources {
 			switch src.SourceType {
 			case sourceTypeGmail:
-				if !cfg.OAuth.HasAnyConfig() {
-					fmt.Printf("Skipping %s (OAuth not configured)\n", src.Identifier)
+				if cfg.Gmail.External == nil && !cfg.OAuth.HasAnyConfig() {
+					fmt.Fprintf(syncTextOutput(), "Skipping %s (OAuth not configured)\n", src.Identifier)
 					continue
 				}
 				appName := sourceOAuthApp(src)
 				// Service accounts are always ready — no per-user token needed
-				if cfg.OAuth.ServiceAccountKeyFor(appName) == "" {
+				if cfg.Gmail.External == nil && cfg.OAuth.ServiceAccountKeyFor(appName) == "" {
 					mgr, err := getOAuthMgr(appName)
 					if err != nil {
 						syncErrors = append(syncErrors, fmt.Sprintf("%s: %v", src.Identifier, err))
 						continue
 					}
 					if !mgr.HasToken(src.Identifier) {
-						fmt.Printf("Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
+						fmt.Fprintf(syncTextOutput(), "Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
 						continue
 					}
 				}
@@ -172,11 +181,11 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 					continue
 				}
 				if skipMsg != "" {
-					fmt.Println(skipMsg)
+					fmt.Fprintln(syncTextOutput(), skipMsg)
 					continue
 				}
 			default:
-				fmt.Printf("Skipping %s (unsupported source type %q)\n", src.Identifier, src.SourceType)
+				fmt.Fprintf(syncTextOutput(), "Skipping %s (unsupported source type %q)\n", src.Identifier, src.SourceType)
 				continue
 			}
 			sources = append(sources, src)
@@ -198,7 +207,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Println("\nInterrupted. Saving checkpoint...")
+		fmt.Fprintln(syncTextOutput(), "\nInterrupted. Saving checkpoint...")
 		cancel()
 	}()
 
@@ -215,7 +224,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 		// Ensure credentials are available before syncing Gmail sources.
 		if src.SourceType == sourceTypeGmail || src.SourceType == "" {
 			appName := sourceOAuthApp(src)
-			if cfg.OAuth.ServiceAccountKeyFor(appName) == "" {
+			if cfg.Gmail.External == nil && cfg.OAuth.ServiceAccountKeyFor(appName) == "" {
 				if _, err := getOAuthMgr(appName); err != nil {
 					syncErrors = append(syncErrors, fmt.Sprintf("%s: %v", src.Identifier, err))
 					continue
@@ -233,10 +242,11 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 	cacheErr := rebuildCacheAfterManualSync(dbPath, state)
 
 	if len(syncErrors) > 0 {
-		fmt.Println()
-		fmt.Println("Errors:")
+		cacheErr = finishSyncJSON(errors.Join(cacheErr, ctx.Err()))
+		fmt.Fprintln(syncTextOutput())
+		fmt.Fprintln(syncTextOutput(), "Errors:")
 		for _, e := range syncErrors {
-			fmt.Printf("  %s\n", e)
+			fmt.Fprintf(syncTextOutput(), "  %s\n", e)
 		}
 		return errors.Join(
 			fmt.Errorf("%d account(s) failed to sync: %s", len(syncErrors), strings.Join(syncErrors, "; ")),
@@ -244,7 +254,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	return cacheErr
+	return finishSyncJSON(errors.Join(cacheErr, ctx.Err()))
 }
 
 // buildAPIClient creates the appropriate gmail.API client for the given
@@ -262,6 +272,9 @@ func buildAPIClient(ctx context.Context, src *store.Source, getOAuthMgr func(str
 	logger := state.logger
 	switch src.SourceType {
 	case sourceTypeGmail, "":
+		if cfg.Gmail.External != nil {
+			return externalGmailClient(ctx, src.Identifier, state)
+		}
 		appName := sourceOAuthApp(src)
 		var tokenSource oauth2.TokenSource
 
@@ -575,7 +588,7 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 	}
 	cfg := state.cfg
 	logger := state.logger
-	progress := &CLIProgress{}
+	progress := &CLIProgress{out: syncTextOutput()}
 
 	// --noresume promises a fresh sync, so it must also bypass the
 	// saved folder high water marks and re-enumerate every mailbox. A clean
@@ -613,7 +626,7 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 		// --after/--before are handled natively by IMAP SEARCH;
 		// only warn about --query which has no IMAP equivalent.
 		if syncQuery != "" {
-			fmt.Printf("Warning: --query is not supported for IMAP sources and will be ignored.\n\n")
+			fmt.Fprintf(syncTextOutput(), "Warning: --query is not supported for IMAP sources and will be ignored.\n\n")
 		}
 		query = ""
 	}
@@ -622,6 +635,12 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 	opts := sync.DefaultOptions()
 	opts.SourceType = src.SourceType
 	opts.Query = query
+	if (src.SourceType == sourceTypeGmail || src.SourceType == "") && cfg.Gmail.External != nil && query == "" && syncLimit == 0 && (!src.SyncCursor.Valid || src.SyncCursor.String == "") {
+		opts.InitialBackfill = true
+	}
+	if (src.SourceType == sourceTypeGmail || src.SourceType == "") && cfg.Gmail.External != nil && cfg.Gmail.External.IncludeSpamTrash {
+		opts.CheckpointScope = "external:include-spam-trash"
+	}
 	opts.NoResume = syncNoResume
 	opts.Limit = syncLimit
 	opts.OperationID = syncOperationID
@@ -639,7 +658,7 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 	// Create syncer with progress reporter
 	syncer := newMessageSyncer(apiClient, s, opts, state).
 		WithLogger(logger).
-		WithProgress(progress)
+		WithProgress(syncProgress(state, progress))
 
 	// Run sync
 	startTime := time.Now()
@@ -647,11 +666,11 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 	if src.DisplayName.Valid && src.DisplayName.String != "" {
 		displayID = src.DisplayName.String
 	}
-	fmt.Printf("Starting full sync for %s\n", displayID)
+	fmt.Fprintf(syncTextOutput(), "Starting full sync for %s\n", displayID)
 	if query != "" && src.SourceType != sourceTypeIMAP {
-		fmt.Printf("Query: %s\n", query)
+		fmt.Fprintf(syncTextOutput(), "Query: %s\n", query)
 	}
-	fmt.Println()
+	fmt.Fprintln(syncTextOutput())
 	syncSource := src
 	if syncSource.ID == 0 {
 		sourceType := syncSource.SourceType
@@ -682,36 +701,43 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 	if err != nil {
 		if ctx.Err() != nil {
 			if opts.NoResume {
-				fmt.Println("\nSync interrupted. Run again to restart (already-imported messages will be skipped).")
+				fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to restart (already-imported messages will be skipped).")
 			} else {
-				fmt.Println("\nSync interrupted. Run again to resume.")
+				fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to resume.")
 			}
-			return nil
+			return ctx.Err()
 		}
 		return fmt.Errorf("sync failed: %w", err)
 	}
 
+	if syncJSON {
+		recordSyncJSON(summary, syncSource)
+		if summary.Errors > 0 {
+			return errors.New("sync has unresolved message errors")
+		}
+		return ctx.Err()
+	}
 	// Print summary; skip the spacer when no progress lines were
 	// printed so a no-op sync doesn't emit stacked blank lines.
 	if progress.printedAnything() {
-		fmt.Println()
+		fmt.Fprintln(syncTextOutput())
 	}
-	fmt.Println("Sync complete!")
-	fmt.Printf("  Duration:      %s\n", summary.Duration.Round(time.Second))
-	fmt.Printf("  Messages:      %d found, %d added, %d skipped\n",
+	fmt.Fprintln(syncTextOutput(), "Sync complete!")
+	fmt.Fprintf(syncTextOutput(), "  Duration:      %s\n", summary.Duration.Round(time.Second))
+	fmt.Fprintf(syncTextOutput(), "  Messages:      %d found, %d added, %d skipped\n",
 		summary.MessagesFound, summary.MessagesAdded, summary.MessagesSkipped)
-	fmt.Printf("  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
+	fmt.Fprintf(syncTextOutput(), "  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
 	if summary.Errors > 0 {
-		fmt.Printf("  Errors:        %d\n", summary.Errors)
+		fmt.Fprintf(syncTextOutput(), "  Errors:        %d\n", summary.Errors)
 	}
 	if summary.WasResumed {
-		fmt.Printf("  (Resumed from checkpoint)\n")
+		fmt.Fprintf(syncTextOutput(), "  (Resumed from checkpoint)\n")
 	}
 
 	// Print timing stats
 	if summary.MessagesAdded > 0 {
 		messagesPerSec := float64(summary.MessagesAdded) / summary.Duration.Seconds()
-		fmt.Printf("  Rate:          %.1f messages/sec\n", messagesPerSec)
+		fmt.Fprintf(syncTextOutput(), "  Rate:          %.1f messages/sec\n", messagesPerSec)
 	}
 
 	elapsed := time.Since(startTime)
@@ -721,7 +747,10 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(string) (
 		"elapsed", elapsed,
 	)
 
-	return nil
+	if summary.Errors > 0 {
+		return errors.New("sync has unresolved message errors")
+	}
+	return ctx.Err()
 }
 
 // trimFolderFilter trims whitespace from folder names and removes empty
@@ -740,28 +769,21 @@ func parseFolderFilter(folders []string) []string {
 	return kept
 }
 func buildSyncQuery() string {
-	parts := []string{}
-
+	var parts []string
+	query := strings.TrimSpace(syncQuery)
+	if query != "" {
+		if syncAfter != "" || syncBefore != "" {
+			query = "(" + query + ")"
+		}
+		parts = append(parts, query)
+	}
 	if syncAfter != "" {
 		parts = append(parts, "after:"+syncAfter)
 	}
 	if syncBefore != "" {
 		parts = append(parts, "before:"+syncBefore)
 	}
-	if syncQuery != "" {
-		parts = append(parts, syncQuery)
-	}
-
-	result := ""
-	var resultSb447 strings.Builder
-	for i, p := range parts {
-		if i > 0 {
-			resultSb447.WriteString(" ")
-		}
-		resultSb447.WriteString(p)
-	}
-	result += resultSb447.String()
-	return result
+	return strings.Join(parts, " ")
 }
 
 // CLIProgress implements gmail.SyncProgressWithDate for terminal output.
@@ -1003,6 +1025,7 @@ func imapSkipReason(src *store.Source, cfg *config.Config, logger *slog.Logger) 
 }
 
 func init() {
+	syncFullCmd.Flags().BoolVar(&syncJSON, "json", false, "Emit JSON progress and per-account sync summaries")
 	syncFullCmd.Flags().Int64("source-id", 0, "Exact source ID to sync")
 	syncFullCmd.Flags().StringVar(&syncOperationID, "sync-operation-id", "", "Attribute runs to a daemon sync operation")
 	_ = syncFullCmd.Flags().MarkHidden("sync-operation-id")

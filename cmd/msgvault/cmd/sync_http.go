@@ -24,6 +24,7 @@ func runSyncIncrementalHTTP(cmd *cobra.Command, args []string) error {
 		return usageErr(cmd, err)
 	}
 	req := daemonclient.CLISyncRequest{
+		JSON:         syncJSON,
 		BuildCache:   force,
 		NoBuildCache: skip,
 		Folders:      parseFolderFilter(syncFolders),
@@ -47,6 +48,7 @@ func runSyncFullHTTP(cmd *cobra.Command, args []string) error {
 		return usageErr(cmd, err)
 	}
 	req := daemonclient.CLISyncRequest{
+		JSON:         syncJSON,
 		BuildCache:   force,
 		NoBuildCache: skip,
 		Full:         true,
@@ -140,7 +142,7 @@ func buildSyncPreflight(st *daemonclient.Client, info HTTPStoreInfo, state *invo
 	var oauthConfigured bool
 	var serviceAccountKey func(string) string
 	if cfg != nil {
-		oauthConfigured = cfg.OAuth.HasAnyConfig()
+		oauthConfigured = cfg.Gmail.External == nil && cfg.OAuth.HasAnyConfig()
 		serviceAccountKey = cfg.OAuth.ServiceAccountKeyFor
 	} else {
 		serviceAccountKey = func(string) string { return "" }

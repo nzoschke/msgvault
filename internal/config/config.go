@@ -564,7 +564,16 @@ type IMAPDraftSource struct {
 
 // GmailConfig contains operator-owned settings for Gmail draft mutations.
 type GmailConfig struct {
-	Drafts []GmailDraftSource `toml:"drafts"`
+	Drafts   []GmailDraftSource   `toml:"drafts"`
+	External *ExternalGmailConfig `toml:"external,omitempty"`
+}
+
+// ExternalGmailConfig delegates Gmail authentication to a local credential provider.
+// The provider resolves and authorizes each requested account. No tokens are saved here.
+type ExternalGmailConfig struct {
+	Endpoint         string `toml:"endpoint"`
+	CredentialSocket string `toml:"credential_socket"`
+	IncludeSpamTrash bool   `toml:"include_spam_trash"`
 }
 
 // GmailDraftSource grants one Gmail source permission to create, edit, or
@@ -1023,6 +1032,9 @@ func decodeConfig(cfg *Config, path string, explicit, homeOverride bool, content
 		}
 		if strings.HasPrefix(key.String(), "imap.drafts.") {
 			return nil, fmt.Errorf("unknown IMAP draft config key %q", key.String())
+		}
+		if strings.HasPrefix(key.String(), "gmail.external.") {
+			return nil, fmt.Errorf("unknown external Gmail config key %q", key.String())
 		}
 		if strings.HasPrefix(key.String(), "gmail.drafts.") {
 			return nil, fmt.Errorf("unknown Gmail draft config key %q", key.String())
@@ -1583,7 +1595,8 @@ type BeeperConfig struct {
 	AccountsConfig map[string]MediaAccountConfig `toml:"accounts_config"`
 	// Drafts lets the daemon write native chat drafts on these sources. The
 	// entries have the same shape as [[gmail.drafts]].
-	Drafts []GmailDraftSource `toml:"drafts"`
+	Drafts   []GmailDraftSource   `toml:"drafts"`
+	External *ExternalGmailConfig `toml:"external,omitempty"`
 }
 
 // MatrixConfig configures native Matrix archive sources ([matrix] table).
