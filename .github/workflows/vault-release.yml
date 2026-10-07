@@ -20,23 +20,31 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: ubuntu-22.04
+            image: ''
           - arch: arm64
             runner: ubuntu-24.04-arm
+            image: ubuntu:22.04
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     container:
-      image: ubuntu:22.04
+      image: ${{ matrix.image }}
       options: --init
     defaults:
       run:
         shell: bash
     steps:
       - name: Install build tools
+        if: matrix.arch == 'arm64'
         run: |
-          sed -i 's|http://archive.ubuntu.com/ubuntu|http://azure.archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
           apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
           apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y gcc g++ git curl tar gzip make unzip libsqlite3-dev ca-certificates
+      - name: Verify build environment
+        run: |
+          . /etc/os-release
+          test "$VERSION_ID" = 22.04
+          for tool in gcc g++ git curl tar gzip make unzip; do command -v "$tool"; done
+          test -f /usr/include/sqlite3.h
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           ref: ${{ inputs.version || github.ref_name }}
@@ -52,8 +60,9 @@ jobs:
         run: |
           version=$(awk '/^go / {print $2}' go.mod)
           curl -fsSL --retry 5 "https://go.dev/dl/go${version}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
-          tar -C /usr/local -xzf /tmp/go.tar.gz
-          echo /usr/local/go/bin >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/msgvault-go"
+          tar -C "$RUNNER_TEMP/msgvault-go" -xzf /tmp/go.tar.gz
+          echo "$RUNNER_TEMP/msgvault-go/go/bin" >> "$GITHUB_PATH"
       - name: Build and test archive
         env:
           RELEASE_VERSION: ${{ inputs.version || github.ref_name }}
