@@ -129,7 +129,6 @@ func (c *Client) request(ctx context.Context, op Operation, method, path string,
 		lastErr = err
 		c.logger.Info("Gmail throttled request; retrying after quota pause",
 			"path", path, "attempt", quotaRetries+1, "max", maxQuotaRetries, "error", err)
-
 	}
 }
 

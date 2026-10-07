@@ -100,7 +100,9 @@ The external Gmail fork publishes Linux CLI and daemon archives when a tag such
 as `v0.20.0-hc.1` is pushed. The `vault-release.yml` workflow builds
 amd64 and arm64 binaries on Ubuntu 22.04, tests each archive, and publishes a
 prerelease with SHA-256 checksums. These archives include external Gmail
-authentication and sync recovery patches, but do not include Web UI assets.
+authentication, bounded initial backfills, and sync recovery patches. They
+include the embedded Web UI and opt-in semantic search through authenticated
+embedding proxies.
 Use the upstream version in the tag to identify the release base.
 
 ## Test
