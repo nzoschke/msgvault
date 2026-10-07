@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,11 @@ func init() {
 		Short: "Prepare opt-in semantic search through an authenticated proxy",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return configureEmbeddingProxy(cfg.ConfigFilePath(), endpoint, authorizationEnv, endpointEnv)
+			state := invocationFromCommand(cmd)
+			if state == nil || state.cfg == nil {
+				return errors.New("configuration is unavailable")
+			}
+			return configureEmbeddingProxy(state.cfg.ConfigFilePath(), endpoint, authorizationEnv, endpointEnv)
 		},
 	}
 	command.Flags().StringVar(&endpoint, "endpoint", "", "OpenAI-compatible proxy base URL")

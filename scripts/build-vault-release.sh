@@ -16,11 +16,14 @@ build_date="$(git show -s --format=%cI HEAD)"
 build_epoch="$(git show -s --format=%ct HEAD)"
 build_dir="$(mktemp -d)"
 trap 'rm -rf "$build_dir"' EXIT
+CGO_ENABLED=0 GOWORK=off go build -trimpath -buildvcs=false \
+  -o "$build_dir/msgvault-codex-bridge" ./cmd/msgvault-codex-bridge
+bridge_digest="$(sha256sum "$build_dir/msgvault-codex-bridge" | cut -d' ' -f1)"
 CGO_ENABLED=1 GOWORK=off go build -tags 'fts5 sqlite_vec' -trimpath -buildvcs=false \
-  -ldflags "-s -w -X go.kenn.io/msgvault/cmd/msgvault/cmd.Version=$version -X go.kenn.io/msgvault/cmd/msgvault/cmd.Commit=$commit -X go.kenn.io/msgvault/cmd/msgvault/cmd.BuildDate=$build_date" \
+  -ldflags "-s -w -X go.kenn.io/msgvault/cmd/msgvault/cmd.Version=$version -X go.kenn.io/msgvault/cmd/msgvault/cmd.Commit=$commit -X go.kenn.io/msgvault/cmd/msgvault/cmd.BuildDate=$build_date -X go.kenn.io/msgvault/internal/peoplesweep.codexBridgeSHA256=$bridge_digest" \
   -o "$build_dir/msgvault" ./cmd/msgvault
 node scripts/check-web-assets.mjs --binary "$build_dir/msgvault"
 "$build_dir/msgvault" sync-external --help >/dev/null
 asset="msgvault_${version}_linux_${architecture}.tar.gz"
-tar --sort=name --mtime="@$build_epoch" --owner=0 --group=0 --numeric-owner -C "$build_dir" -czf "$output/$asset" msgvault
+tar --sort=name --mtime="@$build_epoch" --owner=0 --group=0 --numeric-owner -C "$build_dir" -czf "$output/$asset" msgvault msgvault-codex-bridge
 (cd "$output" && sha256sum "$asset" > "$asset.sha256")
