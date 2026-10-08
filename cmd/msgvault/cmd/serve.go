@@ -39,6 +39,7 @@ import (
 	"go.kenn.io/msgvault/internal/kataevidence"
 	"go.kenn.io/msgvault/internal/meetingimport"
 	"go.kenn.io/msgvault/internal/messageimport"
+"go.kenn.io/msgvault/internal/batchmessageimport"
 	"go.kenn.io/msgvault/internal/msmail"
 	"go.kenn.io/msgvault/internal/muesli"
 	"go.kenn.io/msgvault/internal/notionmeetings"
@@ -2240,6 +2241,10 @@ func (a *storeAPIAdapter) ImportMuesli(ctx context.Context, req muesli.RemoteReq
 		}
 	}
 	return result, err
+}
+
+func (a *storeAPIAdapter) ImportMessages(ctx context.Context, in batchmessageimport.ImportMessagesRequest) (batchmessageimport.ImportMessagesResponse, error) {
+	return a.store.ImportMessages(ctx, in)
 }
 
 func (a *storeAPIAdapter) GetStatsContext(ctx context.Context) (*api.StoreStats, error) {
