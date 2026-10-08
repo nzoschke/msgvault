@@ -892,6 +892,7 @@ func rawRouteParameters(operationID string) []*huma.Param {
 			queryStringParam("after", "Only messages on or after this YYYY-MM-DD date", false),
 			queryStringParam("before", "Only messages before this YYYY-MM-DD date", false),
 			queryIntegerParam(limitParam, "Maximum messages to sync"),
+			queryStringParam("operation_id", "Unique caller ID for this sync attempt", false),
 			queryBooleanParam("noresume", "Ignore checkpoints and start fresh"),
 			queryRefArrayParam("folder", "IMAP folder names to include (repeatable)"),
 			queryRefArrayParam("skip-folder", "IMAP folder names to exclude (repeatable)"),

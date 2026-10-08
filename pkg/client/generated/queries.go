@@ -335,6 +335,9 @@ type SyncFullCLIQuery struct {
 	// Limit Maximum messages to sync
 	Limit *int64 `json:"limit,omitempty"`
 
+	// OperationID Unique caller ID for this sync attempt
+	OperationID *string `json:"operation_id,omitempty"`
+
 	// Noresume Ignore checkpoints and start fresh
 	Noresume *bool `json:"noresume,omitempty"`
 

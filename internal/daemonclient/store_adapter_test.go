@@ -2519,3 +2519,33 @@ type readCloserImpl struct {
 func (rc *readCloserImpl) Close() error {
 	return nil
 }
+
+func TestRunCLISyncOperationCapability(t *testing.T) {
+	for _, version := range []string{"3.6.0", "3.7.0"} {
+		t.Run(version, func(t *testing.T) {
+			calls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/v1/health" {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"status":"ok","api_schema_version":"` + version + `"}`))
+					return
+				}
+				calls++
+				assert.Equal(t, "attempt-1", r.URL.Query().Get("operation_id"))
+				w.Header().Set("Content-Type", "application/x-ndjson")
+				_, _ = w.Write([]byte("{\"type\":\"complete\"}\n"))
+			}))
+			t.Cleanup(srv.Close)
+			client, err := New(Config{URL: srv.URL, AllowInsecure: true, HTTPClient: srv.Client()})
+			require.NoError(t, err)
+			err = client.RunCLISync(t.Context(), CLISyncRequest{Full: true, Email: "archive@example.com", OperationID: "attempt-1"}, nil)
+			if version == "3.6.0" {
+				require.ErrorContains(t, err, "3.7.0")
+				assert.Zero(t, calls)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, 1, calls)
+			}
+		})
+	}
+}

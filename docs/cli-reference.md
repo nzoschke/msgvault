@@ -4458,3 +4458,13 @@ msgvault agent-token revoke <id>
 The grant is removed from the in-memory registry immediately. Any request in flight that
 already passed authentication completes, but the next authentication attempt with the
 revoked secret is denied without fallback.
+
+### Correlating full sync attempts
+
+`sync-full ACCOUNT --operation-id ID` reserves a unique caller-supplied operation
+before syncing. Use 1–128 ASCII letters, digits, underscores or hyphens and a new
+ID for each attempt. An exact account or `--source-id` is required. The operation
+and its `sync_runs.operation_id` links survive CLI interruption; successful,
+failed and retried attempts can be attributed without matching timestamps.
+Reusing an operation ID or syncing a busy source returns a conflict. This option
+requires daemon API schema 3.7.0 or newer.

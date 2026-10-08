@@ -25,14 +25,15 @@ import (
 )
 
 var (
-	syncQuery       string
-	syncNoResume    bool
-	syncBefore      string
-	syncAfter       string
-	syncLimit       int
-	syncOperationID string
-	syncFolders     []string // folder names to include (from --folder flag)
-	syncSkipFolders []string // folder names to exclude (from --skip-folder flag)
+	syncQuery             string
+	syncNoResume          bool
+	syncBefore            string
+	syncAfter             string
+	syncLimit             int
+	syncOperationID       string
+	syncClientOperationID string
+	syncFolders           []string // folder names to include (from --folder flag)
+	syncSkipFolders       []string // folder names to exclude (from --skip-folder flag)
 )
 
 var syncFullCmd = &cobra.Command{
@@ -1027,6 +1028,7 @@ func imapSkipReason(src *store.Source, cfg *config.Config, logger *slog.Logger) 
 func init() {
 	syncFullCmd.Flags().BoolVar(&syncJSON, "json", false, "Emit JSON progress and per-account sync summaries")
 	syncFullCmd.Flags().Int64("source-id", 0, "Exact source ID to sync")
+	syncFullCmd.Flags().StringVar(&syncClientOperationID, "operation-id", "", "Unique caller ID linking this attempt to its sync runs")
 	syncFullCmd.Flags().StringVar(&syncOperationID, "sync-operation-id", "", "Attribute runs to a daemon sync operation")
 	_ = syncFullCmd.Flags().MarkHidden("sync-operation-id")
 	syncFullCmd.Flags().StringVar(&syncQuery, "query", "", "Gmail search query")

@@ -1079,6 +1079,38 @@ func (s *Server) handleCLISyncWithMode(w http.ResponseWriter, r *http.Request, f
 		return
 	}
 
+	if req.OperationID != "" {
+		jobStore, ok := s.store.(importJobStore)
+		if !ok {
+			writeAPIHTTPError(w, cliStoreUnavailableError())
+			return
+		}
+		sourceID := req.SourceID
+		if !req.SourceIDSet {
+			sources, err := jobStore.GetSourcesByIdentifierOrDisplayName(req.Email)
+			if err != nil {
+				writeError(w, 500, "internal_error", "Failed to resolve sync account")
+				return
+			}
+			source, err := resolveExactImportSource(sources, req.Email)
+			if err != nil || source == nil {
+				writeError(w, 400, "invalid_source_selector", "operation_id requires one exact syncable source")
+				return
+			}
+			sourceID = source.ID
+		} else {
+			source, err := jobStore.GetSourceByID(sourceID)
+			if err != nil || source == nil || (source.SourceType != "gmail" && source.SourceType != "imap") {
+				writeError(w, 400, "invalid_source_selector", "operation_id requires one exact syncable source")
+				return
+			}
+		}
+		if _, err := jobStore.CreateSyncOperation(sourceID, req.OperationID); err != nil {
+			writeError(w, 409, "operation_conflict", "Sync operation already exists or source is busy")
+			return
+		}
+		req.SourceID, req.SourceIDSet, req.Email = sourceID, true, ""
+	}
 	writeEvent := newCLINDJSONEventWriter[CLISyncEvent](w)
 	if err := runner.RunCLISync(r.Context(), req, writeEvent); err != nil {
 		s.logger.Error("failed to run CLI sync", "full", full, "error", err)
@@ -1097,12 +1129,21 @@ func parseCLISyncRequest(r *http.Request, full bool) (CLISyncRequest, *apiHTTPEr
 	if _, present := values["query"]; present && strings.TrimSpace(values.Get("query")) == "" {
 		return CLISyncRequest{}, newAPIHTTPError(http.StatusBadRequest, "invalid_query", "query must not be empty or whitespace-only")
 	}
+	if ids, present := values["operation_id"]; present {
+		if !full || len(ids) != 1 || len(ids[0]) == 0 || len(ids[0]) > 128 || strings.Trim(ids[0], "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") != "" {
+			return CLISyncRequest{}, newAPIHTTPError(http.StatusBadRequest, "invalid_operation_id", "operation_id requires a full sync and 1-128 ASCII letters, digits, hyphens or underscores")
+		}
+		if values.Get("email") == "" && values.Get("source_id") == "" {
+			return CLISyncRequest{}, newAPIHTTPError(http.StatusBadRequest, "invalid_source_selector", "operation_id requires one exact source")
+		}
+	}
 	req := CLISyncRequest{
-		Full:   full,
-		Email:  values.Get("email"),
-		Query:  values.Get("query"),
-		Before: values.Get("before"),
-		After:  values.Get("after"),
+		OperationID: values.Get("operation_id"),
+		Full:        full,
+		Email:       values.Get("email"),
+		Query:       values.Get("query"),
+		Before:      values.Get("before"),
+		After:       values.Get("after"),
 	}
 	for _, flag := range []struct {
 		name  string

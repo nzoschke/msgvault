@@ -14822,7 +14822,7 @@ components:
       type: apiKey
 info:
   title: msgvault API
-  version: 3.8.0
+  version: 3.9.0
 openapi: 3.0.3
 paths:
   /api/daemon/identity:
@@ -18491,6 +18491,11 @@ paths:
           schema:
             format: int64
             type: integer
+        - description: Unique caller ID for this sync attempt
+          in: query
+          name: operation_id
+          schema:
+            type: string
         - description: Ignore checkpoints and start fresh
           in: query
           name: noresume

@@ -42,6 +42,7 @@ type CLIStats struct {
 type CLICacheStats = cacheops.CacheStats
 
 type CLISyncRequest struct {
+	OperationID  string
 	JSON         bool
 	Full         bool
 	BuildCache   bool
@@ -427,6 +428,15 @@ func (c *Client) RunCLISync(
 	req CLISyncRequest,
 	output func(stream, data string) error,
 ) error {
+	if req.OperationID != "" {
+		version, err := c.APISchemaVersion(ctx)
+		if err != nil {
+			return err
+		}
+		if !req.Full || !apiSchemaVersionAtLeast(version, "3.7.0") {
+			return fmt.Errorf("operation IDs require sync-full and daemon API schema 3.7.0 or newer")
+		}
+	}
 	if req.BuildCache || req.NoBuildCache {
 		version, err := c.APISchemaVersion(ctx)
 		if err != nil {
@@ -449,6 +459,7 @@ func (c *Client) RunCLISync(
 		path = "/api/v1/cli/sync-full"
 		return c.runCLIStream(ctx, path, "sync", &generated.SyncFullCLIRequestOptions{
 			Query: &generated.SyncFullCLIQuery{
+				OperationID:  optionalString(req.OperationID),
 				JSON:         optionalBool(req.JSON),
 				BuildCache:   optionalBool(req.BuildCache),
 				NoBuildCache: optionalBool(req.NoBuildCache),

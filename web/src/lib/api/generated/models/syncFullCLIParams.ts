@@ -40,6 +40,10 @@ export type SyncFullCLIParams = {
    */
   limit?: number;
   /**
+   * Unique caller ID for this sync attempt
+   */
+  operation_id?: string;
+  /**
    * Ignore checkpoints and start fresh
    */
   noresume?: boolean;
