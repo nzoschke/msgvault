@@ -6299,6 +6299,68 @@ components:
         - skipped
         - errors
       type: object
+    ImportMessage:
+      additionalProperties: false
+      properties:
+        body_text:
+          maxLength: 2097152
+          minLength: 1
+          type: string
+        metadata:
+          additionalProperties: {}
+          type: object
+          x-go-type: map[string]any
+        sent_at:
+          format: date-time
+          type: string
+        source_conversation_id:
+          maxLength: 512
+          minLength: 1
+          type: string
+        source_message_id:
+          maxLength: 512
+          minLength: 1
+          type: string
+        subject:
+          maxLength: 4096
+          minLength: 1
+          type: string
+      required:
+        - source_message_id
+        - source_conversation_id
+        - subject
+        - sent_at
+        - body_text
+      type: object
+    ImportMessagesRequest:
+      additionalProperties: false
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/ImportMessage"
+          maxItems: 100
+          minItems: 1
+          type: array
+        source:
+          $ref: "#/components/schemas/ImportSource"
+      required:
+        - source
+        - messages
+      type: object
+    ImportMessagesResponse:
+      additionalProperties: true
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/ImportedMessage"
+          type: array
+        source_id:
+          format: int64
+          type: integer
+      required:
+        - source_id
+        - messages
+      type: object
     ImportRequest:
       additionalProperties: false
       properties:
@@ -6342,6 +6404,42 @@ components:
         - signal
         - candidates
         - applied
+      type: object
+    ImportSource:
+      additionalProperties: false
+      properties:
+        display_name:
+          maxLength: 512
+          type: string
+        identifier:
+          maxLength: 512
+          minLength: 1
+          type: string
+        type:
+          maxLength: 80
+          minLength: 1
+          type: string
+      required:
+        - type
+        - identifier
+      type: object
+    ImportedMessage:
+      additionalProperties: true
+      properties:
+        message_id:
+          format: int64
+          type: integer
+        source_message_id:
+          type: string
+        status:
+          enum:
+            - created
+            - unchanged
+          type: string
+      required:
+        - source_message_id
+        - message_id
+        - status
       type: object
     KataEvidenceLinkRequest:
       additionalProperties: false
@@ -21325,6 +21423,81 @@ paths:
       security:
         - apiKey: []
       summary: Import one meeting
+      tags:
+        - API
+  /api/v1/import/messages:
+    post:
+      operationId: importMessages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportMessagesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportMessagesResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+      security:
+        - apiKey: []
+      summary: Import immutable documents into a versioned custom source
       tags:
         - API
   /api/v1/imports:

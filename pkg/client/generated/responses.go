@@ -1519,6 +1519,24 @@ type ImportMeetingResponseJSON = MeetingImportResponse
 
 type ImportMeetingErrorResponse = ErrorResponse
 
+type ImportMessagesResponseJSON = ImportMessagesResponse
+
+type ImportMessagesErrorResponse = ErrorResponse
+
+type ImportMessagesErrorResponseJSON = ErrorResponse
+
+type ImportMessagesErrorResponseJSON409 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON413 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON415 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON422 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON500 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON503 = ErrorResponse
+
 type CreateImportJobResponse = ImportJobResponse
 
 type CreateImportJobErrorResponse = ErrorResponse
@@ -4778,6 +4796,21 @@ type ImportMeetingResp struct {
 	StatusCode   int
 	JSON200      *ImportMeetingResponse
 	JSON201      *ImportMeetingResponseJSON
+}
+
+type ImportMessagesResp struct {
+	HTTPResponse *http.Response
+	Body         []byte
+	StatusCode   int
+	JSON200      *ImportMessagesResponseJSON
+	JSON400      *ImportMessagesErrorResponse
+	JSON401      *ImportMessagesErrorResponseJSON
+	JSON409      *ImportMessagesErrorResponseJSON409
+	JSON413      *ImportMessagesErrorResponseJSON413
+	JSON415      *ImportMessagesErrorResponseJSON415
+	JSON422      *ImportMessagesErrorResponseJSON422
+	JSON500      *ImportMessagesErrorResponseJSON500
+	JSON503      *ImportMessagesErrorResponseJSON503
 }
 
 type CreateImportJobResp struct {

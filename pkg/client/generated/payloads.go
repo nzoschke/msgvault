@@ -118,6 +118,8 @@ type UnlinkIdentityParticipantsBody = IdentityLinkRequest
 
 type ImportMeetingBody = MeetingImportRequest
 
+type ImportMessagesBody = ImportMessagesRequest
+
 type CreateImportJobBody = ImportJobRequest
 
 type PrepareKataEvidenceBody = KataEvidencePrepareRequest

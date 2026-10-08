@@ -1035,6 +1035,23 @@ func (i ImportJobResponseStatus) Validate() error {
 	}
 }
 
+type ImportedMessageStatus string
+
+const (
+	Created   ImportedMessageStatus = "created"
+	Unchanged ImportedMessageStatus = "unchanged"
+)
+
+// Validate checks if the ImportedMessageStatus value is valid
+func (i ImportedMessageStatus) Validate() error {
+	switch i {
+	case Created, Unchanged:
+		return nil
+	default:
+		return runtime.NewValidationErrorsFromString("Enum", fmt.Sprintf("must be a valid ImportedMessageStatus value, got: %v", i))
+	}
+}
+
 type MediaSearchResultOrigin string
 
 const (
@@ -1301,9 +1318,9 @@ const (
 	Added                               OperationPublicCounterName = "added"
 	Attempted                           OperationPublicCounterName = "attempted"
 	Books                               OperationPublicCounterName = "books"
-	Created                             OperationPublicCounterName = "created"
 	IdentityRejected                    OperationPublicCounterName = "identity_rejected"
 	ItemErrors                          OperationPublicCounterName = "item_errors"
+	OperationPublicCounterNameCreated   OperationPublicCounterName = "created"
 	OperationPublicCounterNameFailed    OperationPublicCounterName = "failed"
 	OperationPublicCounterNameSucceeded OperationPublicCounterName = "succeeded"
 	Processed                           OperationPublicCounterName = "processed"
@@ -1320,7 +1337,7 @@ const (
 // Validate checks if the OperationPublicCounterName value is valid
 func (o OperationPublicCounterName) Validate() error {
 	switch o {
-	case Added, Attempted, Books, Created, IdentityRejected, ItemErrors, OperationPublicCounterNameFailed, OperationPublicCounterNameSucceeded, Processed, ProjectedWrites, Removed, Requested, Skipped, Started, Suppressed, Truncated, Updated:
+	case Added, Attempted, Books, IdentityRejected, ItemErrors, OperationPublicCounterNameCreated, OperationPublicCounterNameFailed, OperationPublicCounterNameSucceeded, Processed, ProjectedWrites, Removed, Requested, Skipped, Started, Suppressed, Truncated, Updated:
 		return nil
 	default:
 		return runtime.NewValidationErrorsFromString("Enum", fmt.Sprintf("must be a valid OperationPublicCounterName value, got: %v", o))

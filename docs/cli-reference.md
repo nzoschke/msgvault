@@ -1546,6 +1546,18 @@ receipts. Reconcile the reported event; do not repeat a completed mutation.
 
 ---
 
+## import-messages
+
+Import immutable prepared documents from JSON on stdin. The command discovers
+the daemon and prints a JSON response with archive IDs and per-record status.
+
+```bash
+msgvault import-messages < prepared.json
+```
+
+See [prepared document imports](api-server.md#post-apiv1importmessages) for the
+JSON contract, versioned source identities, size limits, and retry behavior.
+
 ## import-eml
 
 Import RFC 5322 `.eml` files inside MailMate-style `.mailbox` directories.

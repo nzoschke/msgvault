@@ -5823,6 +5823,64 @@ type ImportJobSummary struct {
 	Updated   int64 `json:"updated"`
 }
 
+type ImportMessage struct {
+	BodyText             string         `json:"body_text" validate:"required,max=2097152,min=1"`
+	Metadata             map[string]any `json:"metadata,omitempty"`
+	SentAt               time.Time      `json:"sent_at" validate:"required"`
+	SourceConversationID string         `json:"source_conversation_id" validate:"required,max=512,min=1"`
+	SourceMessageID      string         `json:"source_message_id" validate:"required,max=512,min=1"`
+	Subject              string         `json:"subject" validate:"required,max=4096,min=1"`
+}
+
+func (i ImportMessage) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(i))
+}
+
+type ImportMessagesRequest struct {
+	Messages []ImportMessage `json:"messages" validate:"required"`
+	Source   ImportSource    `json:"source"`
+}
+
+func (i ImportMessagesRequest) Validate() error {
+	var errors runtime.ValidationErrors
+	for i, item := range i.Messages {
+		if v, ok := any(item).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append(fmt.Sprintf("Messages[%d]", i), err)
+			}
+		}
+	}
+	if v, ok := any(i.Source).(runtime.Validator); ok {
+		if err := v.Validate(); err != nil {
+			errors = errors.Append("Source", err)
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
+type ImportMessagesResponse struct {
+	Messages []ImportedMessage `json:"messages" validate:"required"`
+	SourceID int64             `json:"source_id"`
+}
+
+func (i ImportMessagesResponse) Validate() error {
+	var errors runtime.ValidationErrors
+	for i, item := range i.Messages {
+		if v, ok := any(item).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append(fmt.Sprintf("Messages[%d]", i), err)
+			}
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
 type ImportRequest struct {
 	Account  *string       `json:"account,omitzero"`
 	Apply    *bool         `json:"apply,omitempty"`
@@ -5875,6 +5933,38 @@ func (i ImportResult) Validate() error {
 	}
 	if err := typesValidator.Var(i.Signal, "required"); err != nil {
 		errors = errors.Append("Signal", err)
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
+type ImportSource struct {
+	DisplayName *string `json:"display_name,omitzero" validate:"omitempty,max=512"`
+	Identifier  string  `json:"identifier" validate:"required,max=512,min=1"`
+	Type        string  `json:"type" validate:"required,max=80,min=1"`
+}
+
+func (i ImportSource) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(i))
+}
+
+type ImportedMessage struct {
+	MessageID       int64                 `json:"message_id"`
+	SourceMessageID string                `json:"source_message_id" validate:"required"`
+	Status          ImportedMessageStatus `json:"status" validate:"required"`
+}
+
+func (i ImportedMessage) Validate() error {
+	var errors runtime.ValidationErrors
+	if err := typesValidator.Var(i.SourceMessageID, "required"); err != nil {
+		errors = errors.Append("SourceMessageID", err)
+	}
+	if v, ok := any(i.Status).(runtime.Validator); ok {
+		if err := v.Validate(); err != nil {
+			errors = errors.Append("Status", err)
+		}
 	}
 	if len(errors) == 0 {
 		return nil

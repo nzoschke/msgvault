@@ -1966,6 +1966,48 @@ exclusive with direct `scope`. The server resolves the full matching population,
 with a 10000-ID transfer ceiling. A stale authority requires reloading; an
 oversized scope must be narrowed. Neither case widens the request.
 
+### Import prepared documents {#post-apiv1importmessages}
+
+**Endpoint:** `POST /api/v1/import/messages`
+
+Archive prepared text through the authenticated API or the generated Go client's
+`ImportMessages` method. The daemon serializes imports with other archive writes.
+The CLI accepts the same JSON on stdin: `msgvault import-messages < prepared.json`.
+It discovers the local daemon and handles authentication like other CLI commands.
+
+```json
+{
+  "source": {"type": "prepared-v1", "identifier": "prepared-v1:you@example.com"},
+  "messages": [{
+    "source_message_id": "thread-123:content-hash",
+    "source_conversation_id": "thread-123",
+    "subject": "Prepared conversation",
+    "sent_at": "2026-10-01T12:00:00Z",
+    "body_text": "Chronological conversation text.",
+    "metadata": {"recipe": "prepared-v1", "original_ids": ["message-123"]}
+  }]
+}
+```
+
+Use a custom versioned source type such as `prepared-v1`; provider types such as
+`gmail` are rejected. Source identity is the pair `(type, identifier)`, allowing
+separate accounts and recipe versions. Only sources created by this endpoint
+can receive imports. Records use message type `document` and remain visible in
+archive-wide queries; filter by source when selecting a dataset.
+
+Each request atomically imports 1–100 records, with a 16 MiB JSON request limit,
+2 MiB UTF-8 body limit per record, and 1 MiB metadata limit per record. Subjects
+and timestamps are required. Metadata is arbitrary JSON; `_msgvault_import` is
+reserved. Responses contain `source_id` and ordered `messages` with
+`source_message_id`, archive `message_id`, and `created` or `unchanged` status.
+
+An identical retry returns the existing archive ID. Reusing an identity with
+different content, or targeting a source not owned by this importer, returns
+`409` and rolls back the entire batch. Deleted identities also conflict. Use a
+content hash in the record identity to retain immutable revisions. Invalid
+records return `422`; malformed JSON returns `400`; oversized HTTP bodies return
+`413`. Attachments and provider synchronization are outside this endpoint.
+
 ### Import a meeting {#post-apiv1importmeeting}
 
 **Endpoint:** `POST /api/v1/import/meeting`

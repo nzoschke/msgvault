@@ -33,6 +33,7 @@ import (
 	"go.kenn.io/msgvault/internal/jobctx"
 	"go.kenn.io/msgvault/internal/kataevidence"
 	"go.kenn.io/msgvault/internal/meetingimport"
+	"go.kenn.io/msgvault/internal/messageimport"
 	"go.kenn.io/msgvault/internal/muesli"
 	"go.kenn.io/msgvault/internal/notionmeetings"
 	"go.kenn.io/msgvault/internal/oauth"
@@ -2022,6 +2023,10 @@ func (a *storeAPIAdapter) ImportMeeting(
 		return meetingimport.Result{}, meetingimport.ErrUnavailable
 	}
 	return a.meetingImporter.Import(ctx, req)
+}
+
+func (a *storeAPIAdapter) ImportMessages(ctx context.Context, in messageimport.ImportMessagesRequest) (messageimport.ImportMessagesResponse, error) {
+	return a.store.ImportMessages(ctx, in)
 }
 
 func (a *storeAPIAdapter) GetStatsContext(ctx context.Context) (*api.StoreStats, error) {
