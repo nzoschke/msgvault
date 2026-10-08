@@ -13301,7 +13301,7 @@ func (c *Client) ImportMuesliRecordingWithResponse(ctx context.Context, options 
 	}
 }
 
-// ImportMessages Import immutable documents into a versioned custom source
+// ImportMessages Import documents or project archived emails into a versioned custom source
 func (c *Client) ImportMessagesWithResponse(ctx context.Context, options *ImportMessagesRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMessagesResp, error) {
 	var err error
 	reqParams := runtime.RequestOptionsParameters{
