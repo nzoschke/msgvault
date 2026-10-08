@@ -13,6 +13,7 @@ import (
 const MaxRequestBytes = 16 << 20
 const MetadataKey = "_msgvault_import"
 const Owner = "messages-v1"
+const ProjectionKey = "_msgvault_projection"
 
 var ErrValidation = errors.New("invalid message import")
 var ErrConflict = errors.New("message import conflicts with existing archive data")
@@ -25,6 +26,7 @@ type ImportSource struct {
 }
 
 type ImportMessage struct {
+	OriginalMessageID    int64          `json:"original_message_id,omitempty" minimum:"1"`
 	SourceMessageID      string         `json:"source_message_id" minLength:"1" maxLength:"512"`
 	SourceConversationID string         `json:"source_conversation_id" minLength:"1" maxLength:"512"`
 	Subject              string         `json:"subject" minLength:"1" maxLength:"4096"`
@@ -41,7 +43,7 @@ type ImportMessagesRequest struct {
 type ImportedMessage struct {
 	SourceMessageID string `json:"source_message_id"`
 	MessageID       int64  `json:"message_id"`
-	Status          string `json:"status" enum:"created,unchanged"`
+	Status          string `json:"status" enum:"created,unchanged,updated"`
 }
 
 type ImportMessagesResponse struct {
@@ -64,6 +66,9 @@ func (in ImportMessagesRequest) Validate() error {
 	}
 	seen := map[string]bool{}
 	for i, m := range in.Messages {
+		if m.OriginalMessageID < 0 {
+			return fmt.Errorf("%w: invalid original message ID", ErrValidation)
+		}
 		if !valid(m.SourceMessageID, 512, true) || !valid(m.SourceConversationID, 512, true) || seen[m.SourceMessageID] {
 			return fmt.Errorf("%w: messages[%d] has an invalid or repeated identity", ErrValidation, i)
 		}
@@ -73,6 +78,9 @@ func (in ImportMessagesRequest) Validate() error {
 		}
 		if _, ok := m.Metadata[MetadataKey]; ok {
 			return fmt.Errorf("%w: reserved metadata key", ErrValidation)
+		}
+		if _, ok := m.Metadata[ProjectionKey]; ok {
+			return fmt.Errorf("%w: reserved projection metadata key", ErrValidation)
 		}
 		data, err := json.Marshal(m.Metadata)
 		if err != nil || len(data) > 1<<20 {

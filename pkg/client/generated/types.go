@@ -5826,6 +5826,7 @@ type ImportJobSummary struct {
 type ImportMessage struct {
 	BodyText             string         `json:"body_text" validate:"required,max=2097152,min=1"`
 	Metadata             map[string]any `json:"metadata,omitempty"`
+	OriginalMessageID    *int64         `json:"original_message_id,omitempty" validate:"omitempty,gte=1"`
 	SentAt               time.Time      `json:"sent_at" validate:"required"`
 	SourceConversationID string         `json:"source_conversation_id" validate:"required,max=512,min=1"`
 	SourceMessageID      string         `json:"source_message_id" validate:"required,max=512,min=1"`

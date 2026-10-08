@@ -13,7 +13,7 @@ import (
 
 func newImportMessagesCommand() *cobra.Command {
 	return &cobra.Command{
-		Use: "import-messages", Short: "Import immutable prepared documents from JSON on stdin", Args: cobra.NoArgs,
+		Use: "import-messages", Short: "Import prepared documents or email projections from JSON on stdin", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), messageimport.MaxRequestBytes+1))
 			if err != nil {

@@ -547,7 +547,7 @@ type ClientInterface interface {
 	ImportMeeting(ctx context.Context, options *ImportMeetingRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMeetingResponseJSON, error)
 	ImportMeetingWithResponse(ctx context.Context, options *ImportMeetingRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMeetingResp, error)
 
-	// ImportMessages Import immutable documents into a versioned custom source
+	// ImportMessages Import documents or project archived emails into a versioned custom source
 	ImportMessages(ctx context.Context, options *ImportMessagesRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMessagesResponseJSON, error)
 	ImportMessagesWithResponse(ctx context.Context, options *ImportMessagesRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMessagesResp, error)
 
@@ -9051,7 +9051,7 @@ func (c *Client) ImportMeeting(ctx context.Context, options *ImportMeetingReques
 	return responseParser(ctx, resp)
 }
 
-// ImportMessages Import immutable documents into a versioned custom source
+// ImportMessages Import documents or project archived emails into a versioned custom source
 func (c *Client) ImportMessages(ctx context.Context, options *ImportMessagesRequestOptions, reqEditors ...runtime.RequestEditorFn) (*ImportMessagesResponseJSON, error) {
 	var err error
 	reqParams := runtime.RequestOptionsParameters{

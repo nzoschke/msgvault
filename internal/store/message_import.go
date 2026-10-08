@@ -38,11 +38,21 @@ func (s *Store) ImportMessages(ctx context.Context, in messageimport.ImportMessa
 			return err
 		}
 		for _, m := range in.Messages {
+			projection, err := loadMessageProjection(projectionQuerier{q, tx}, m, out.SourceID)
+			if err != nil {
+				return err
+			}
 			m.SentAt = m.SentAt.UTC()
 			if len(m.Metadata) == 0 {
 				m.Metadata = nil
 			}
-			raw, err := json.Marshal(m)
+			raw, err := json.Marshal(struct {
+				Message    messageimport.ImportMessage
+				Projection *messageProjection
+			}{m, projection})
+			if projection == nil {
+				raw, err = json.Marshal(m)
+			}
 			if err != nil {
 				return err
 			}
@@ -50,23 +60,36 @@ func (s *Store) ImportMessages(ctx context.Context, in messageimport.ImportMessa
 			var id int64
 			var metadata string
 			var deleted, sourceDeleted sql.NullTime
+			status := "created"
 			err = q.QueryRow(`SELECT id, COALESCE(metadata, '{}'), deleted_at, deleted_from_source_at FROM messages
 				WHERE source_id = ? AND source_message_id = ?`, out.SourceID, m.SourceMessageID).Scan(&id, &metadata, &deleted, &sourceDeleted)
 			if err == nil {
 				var prior map[string]json.RawMessage
 				var hash string
-				if json.Unmarshal([]byte(metadata), &prior) != nil || json.Unmarshal(prior[messageimport.MetadataKey], &hash) != nil || hash != digest || deleted.Valid || sourceDeleted.Valid {
+				if json.Unmarshal([]byte(metadata), &prior) != nil || json.Unmarshal(prior[messageimport.MetadataKey], &hash) != nil || deleted.Valid || sourceDeleted.Valid {
 					return messageimport.ErrConflict
 				}
-				out.Messages = append(out.Messages, messageimport.ImportedMessage{SourceMessageID: m.SourceMessageID, MessageID: id, Status: "unchanged"})
-				continue
+				if hash == digest {
+					out.Messages = append(out.Messages, messageimport.ImportedMessage{SourceMessageID: m.SourceMessageID, MessageID: id, Status: "unchanged"})
+					continue
+				}
+				var previous messageProjection
+				if projection == nil || json.Unmarshal(prior[messageimport.ProjectionKey], &previous) != nil || previous.OriginalMessageID != projection.OriginalMessageID {
+					return messageimport.ErrConflict
+				}
+				status = "updated"
 			}
-			if !errors.Is(err, sql.ErrNoRows) {
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
 			meta := map[string]any{messageimport.MetadataKey: digest}
 			for key, value := range m.Metadata {
 				meta[key] = value
+			}
+			conversationType := "document"
+			if projection != nil {
+				meta[messageimport.ProjectionKey] = projection
+				conversationType = "email_thread"
 			}
 			encoded, err := json.Marshal(meta)
 			if err != nil {
@@ -80,7 +103,7 @@ func (s *Store) ImportMessages(ctx context.Context, in messageimport.ImportMessa
 			id, err = s.persistMessageWithParticipantsTx(ctx, tx, nil, nil, func([]int64) *MessagePersistData {
 				return &MessagePersistData{
 					Message:      &Message{SourceID: out.SourceID, SourceMessageID: m.SourceMessageID, MessageType: "document", Subject: sql.NullString{String: m.Subject, Valid: true}, SentAt: sql.NullTime{Time: m.SentAt, Valid: true}, Snippet: sql.NullString{String: string(snippet), Valid: true}, SizeEstimate: int64(len(m.BodyText))},
-					Conversation: &ConversationPersistData{SourceConversationID: m.SourceConversationID, ConversationType: "document", Title: m.Subject},
+					Conversation: &ConversationPersistData{SourceConversationID: m.SourceConversationID, ConversationType: conversationType, Title: m.Subject},
 					BodyText:     sql.NullString{String: m.BodyText, Valid: true}, Metadata: &storedMetadata,
 					RawMIME: raw, RawFormat: "message-import-json", FTS: &FTSDoc{Subject: m.Subject, Body: m.BodyText},
 				}
@@ -88,7 +111,10 @@ func (s *Store) ImportMessages(ctx context.Context, in messageimport.ImportMessa
 			if err != nil {
 				return err
 			}
-			out.Messages = append(out.Messages, messageimport.ImportedMessage{SourceMessageID: m.SourceMessageID, MessageID: id, Status: "created"})
+			if err := s.applyMessageProjection(q, id, out.SourceID, projection, m.BodyText); err != nil {
+				return err
+			}
+			out.Messages = append(out.Messages, messageimport.ImportedMessage{SourceMessageID: m.SourceMessageID, MessageID: id, Status: status})
 		}
 		return nil
 	})

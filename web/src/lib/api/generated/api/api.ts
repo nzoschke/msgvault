@@ -1928,7 +1928,7 @@ export const importMeeting = (
   );
 };
 /**
- * @summary Import immutable documents into a versioned custom source
+ * @summary Import documents or project archived emails into a versioned custom source
  */
 export const importMessages = (
   importMessagesRequest: ImportMessagesRequest,

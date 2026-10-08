@@ -10,6 +10,8 @@ export interface ImportMessage {
    */
   body_text: string;
   metadata?: ImportMessageMetadata;
+  /** @minimum 1 */
+  original_message_id?: number;
   sent_at: string;
   /**
    * @minLength 1

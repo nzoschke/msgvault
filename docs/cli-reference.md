@@ -1548,7 +1548,7 @@ receipts. Reconcile the reported event; do not repeat a completed mutation.
 
 ## import-messages
 
-Import immutable prepared documents from JSON on stdin. The command discovers
+Import prepared documents or email projections from JSON on stdin. The command discovers
 the daemon and prints a JSON response with archive IDs and per-record status.
 
 ```bash

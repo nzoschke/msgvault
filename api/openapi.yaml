@@ -6310,6 +6310,10 @@ components:
           additionalProperties: {}
           type: object
           x-go-type: map[string]any
+        original_message_id:
+          format: int64
+          minimum: 1
+          type: integer
         sent_at:
           format: date-time
           type: string
@@ -6435,6 +6439,7 @@ components:
           enum:
             - created
             - unchanged
+            - updated
           type: string
       required:
         - source_message_id
@@ -21497,7 +21502,7 @@ paths:
           description: Error
       security:
         - apiKey: []
-      summary: Import immutable documents into a versioned custom source
+      summary: Import documents or project archived emails into a versioned custom source
       tags:
         - API
   /api/v1/imports:

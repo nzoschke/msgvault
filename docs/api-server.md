@@ -1999,14 +1999,31 @@ Each request atomically imports 1–100 records, with a 16 MiB JSON request limi
 2 MiB UTF-8 body limit per record, and 1 MiB metadata limit per record. Subjects
 and timestamps are required. Metadata is arbitrary JSON; `_msgvault_import` is
 reserved. Responses contain `source_id` and ordered `messages` with
-`source_message_id`, archive `message_id`, and `created` or `unchanged` status.
+`source_message_id`, archive `message_id`, and `created`, `unchanged`, or `updated` status.
 
 An identical retry returns the existing archive ID. Reusing an identity with
 different content, or targeting a source not owned by this importer, returns
 `409` and rolls back the entire batch. Deleted identities also conflict. Use a
 content hash in the record identity to retain immutable revisions. Invalid
 records return `422`; malformed JSON returns `400`; oversized HTTP bodies return
-`413`. Attachments and provider synchronization are outside this endpoint.
+`413`. Uploading attachment bytes and provider synchronization are outside this endpoint.
+
+To project an archived email, supply `original_message_id` on a record and keep
+its original `source_message_id` and `source_conversation_id`. The server copies
+the original sender, recipients, subject, dates, flags, RFC Message-ID, List-ID,
+labels, and attachment references into the destination source. Labels receive
+destination-scoped IDs; attachment bytes remain shared in content-addressed
+storage. Gmail's `SENT` label also supplies outgoing attribution. The supplied
+text replaces the body; the original email is unchanged.
+
+All MIME headers, including repeated headers, are retained in the reserved
+`_msgvault_projection` metadata alongside the original archive ID and structured
+snapshot. Raw projection data uses `message-projection-json`, not signed MIME
+with substituted body bytes. Only original MIME-backed emails can be projected.
+Identical retries return `unchanged`; changes to the cleaned text or original
+envelope, flags, labels, or attachment references update the same projected
+archive ID and return `updated`. A projection cannot change its original archive
+ID. Generic document imports without `original_message_id` remain immutable.
 
 ### Import a meeting {#post-apiv1importmeeting}
 
