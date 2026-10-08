@@ -97,18 +97,28 @@ func loadMessageProjection(q projectionQuerier, in messageimport.ImportMessage, 
 	if err = q.QueryRow(`SELECT raw_data,compression,raw_format FROM message_raw WHERE message_id=?`, in.OriginalMessageID).Scan(&raw, &compression, &format); err != nil {
 		return nil, err
 	}
-	if format != "mime" {
-		return nil, fmt.Errorf("%w: original email requires MIME", messageimport.ErrValidation)
-	}
 	decoded, err := decodeMessageRaw(raw, compression)
 	if err != nil {
 		return nil, err
 	}
-	email, err := mail.ReadMessage(bytes.NewReader(decoded))
-	if err != nil {
-		return nil, fmt.Errorf("read original headers: %w", err)
+	switch format {
+	case "mime":
+		email, err := mail.ReadMessage(bytes.NewReader(decoded))
+		if err != nil {
+			return nil, fmt.Errorf("read original headers: %w", err)
+		}
+		p.Headers = email.Header
+	case "message-projection-json":
+		var original struct {
+			Projection *messageProjection `json:"projection"`
+		}
+		if err := json.Unmarshal(decoded, &original); err != nil || original.Projection == nil || original.Projection.OriginalMessageID <= 0 || len(original.Projection.Headers) == 0 {
+			return nil, fmt.Errorf("%w: invalid original projection", messageimport.ErrValidation)
+		}
+		p.Headers = original.Projection.Headers
+	default:
+		return nil, fmt.Errorf("%w: original email requires MIME or an email projection", messageimport.ErrValidation)
 	}
-	p.Headers = email.Header
 	return p, nil
 }
 

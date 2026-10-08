@@ -81,6 +81,38 @@ func TestImportMessagesEmailProjection(t *testing.T) {
 	originalRaw, err := st.GetMessageRaw(101)
 	require.NoError(t, err)
 	assert.Equal(t, raw, originalRaw)
+
+	projected := in
+	projected.Source = messageimport.ImportSource{Type: "classified-v1", Identifier: "classified-v1:owner@example.com"}
+	projected.Messages = append([]messageimport.ImportMessage(nil), in.Messages...)
+	projected.Messages[0].OriginalMessageID = id
+	copied, err := st.ImportMessages(t.Context(), projected)
+	require.NoError(t, err)
+	copiedID := copied.Messages[0].MessageID
+	require.NoError(t, st.DB().QueryRow(`SELECT sender_id,is_from_me FROM messages WHERE id=?`, copiedID).Scan(&sender, &outgoing))
+	assert.Equal(t, int64(101), sender)
+	assert.True(t, outgoing)
+	metadata, err = st.GetMessageMetadata(copiedID)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(metadata.String), &meta))
+	assert.Contains(t, string(meta[messageimport.ProjectionKey]), `"X-Custom":["first","second"]`)
+	require.NoError(t, st.DB().QueryRow(`SELECT count(*) FROM attachments WHERE message_id=? AND storage_path='ab/hash'`, copiedID).Scan(&count))
+	assert.Equal(t, 1, count)
+	require.NoError(t, st.DB().QueryRow(`SELECT count(*) FROM message_labels ml JOIN labels l ON l.id=ml.label_id WHERE ml.message_id=? AND l.source_id=? AND l.name='Renamed'`, copiedID, copied.SourceID).Scan(&count))
+	assert.Equal(t, 1, count)
+	note := projected.Messages[0]
+	note.OriginalMessageID = 0
+	note.SourceMessageID = "decision:thread:hash"
+	note.BodyText = "FYI"
+	projected.Messages = []messageimport.ImportMessage{note}
+	decision, err := st.ImportMessages(t.Context(), projected)
+	require.NoError(t, err)
+	var conversationID, decisionConversationID int64
+	var conversationType string
+	require.NoError(t, st.DB().QueryRow(`SELECT m.conversation_id,c.conversation_type FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?`, copiedID).Scan(&conversationID, &conversationType))
+	require.NoError(t, st.DB().QueryRow(`SELECT conversation_id FROM messages WHERE id=?`, decision.Messages[0].MessageID).Scan(&decisionConversationID))
+	assert.Equal(t, conversationID, decisionConversationID)
+	assert.Equal(t, "email_thread", conversationType)
 	in.Messages[0].OriginalMessageID = 999
 	_, err = st.ImportMessages(t.Context(), in)
 	require.ErrorIs(t, err, messageimport.ErrValidation)

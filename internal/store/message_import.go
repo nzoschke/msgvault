@@ -103,7 +103,7 @@ func (s *Store) ImportMessages(ctx context.Context, in messageimport.ImportMessa
 			id, err = s.persistMessageWithParticipantsTx(ctx, tx, nil, nil, func([]int64) *MessagePersistData {
 				return &MessagePersistData{
 					Message:      &Message{SourceID: out.SourceID, SourceMessageID: m.SourceMessageID, MessageType: "document", Subject: sql.NullString{String: m.Subject, Valid: true}, SentAt: sql.NullTime{Time: m.SentAt, Valid: true}, Snippet: sql.NullString{String: string(snippet), Valid: true}, SizeEstimate: int64(len(m.BodyText))},
-					Conversation: &ConversationPersistData{SourceConversationID: m.SourceConversationID, ConversationType: conversationType, Title: m.Subject},
+					Conversation: &ConversationPersistData{SourceConversationID: m.SourceConversationID, ConversationType: conversationType, Title: m.Subject, PreserveExistingType: projection == nil},
 					BodyText:     sql.NullString{String: m.BodyText, Valid: true}, Metadata: &storedMetadata,
 					RawMIME: raw, RawFormat: "message-import-json", FTS: &FTSDoc{Subject: m.Subject, Body: m.BodyText},
 				}

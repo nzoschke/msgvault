@@ -2019,7 +2019,10 @@ text replaces the body; the original email is unchanged.
 All MIME headers, including repeated headers, are retained in the reserved
 `_msgvault_projection` metadata alongside the original archive ID and structured
 snapshot. Raw projection data uses `message-projection-json`, not signed MIME
-with substituted body bytes. Only original MIME-backed emails can be projected.
+with substituted body bytes. MIME-backed emails and existing email projections can be projected.
+Projection chains preserve the original headers and copy the immediate source
+record's structured email fields. Adding a document to an existing email thread
+preserves its conversation type.
 Identical retries return `unchanged`; changes to the cleaned text or original
 envelope, flags, labels, or attachment references update the same projected
 archive ID and return `updated`. A projection cannot change its original archive
