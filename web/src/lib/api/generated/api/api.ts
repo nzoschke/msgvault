@@ -201,6 +201,8 @@ import type {
   IdentityMatchRejectResponse,
   ImportJobRequest,
   ImportJobResponse,
+  ImportMessagesRequest,
+  ImportMessagesResponse,
   KataEvidenceLinkRequest,
   KataEvidencePrepareRequest,
   KataEvidencePrepareResponse,
@@ -1921,6 +1923,23 @@ export const importMeeting = (
       method: "POST",
       headers: { "Content-Type": "application/json" },
       data: meetingImportRequest,
+    },
+    options,
+  );
+};
+/**
+ * @summary Import immutable documents into a versioned custom source
+ */
+export const importMessages = (
+  importMessagesRequest: ImportMessagesRequest,
+  options?: SecondParameter<typeof orvalFetch<ImportMessagesResponse>>,
+) => {
+  return orvalFetch<ImportMessagesResponse>(
+    {
+      url: `/api/v1/import/messages`,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      data: importMessagesRequest,
     },
     options,
   );
