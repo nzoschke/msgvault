@@ -19,7 +19,7 @@ type BatchMessageImporter interface {
 const batchMessageImportEndpointPath = "/api/v1/import/messages"
 
 func (s *Server) registerBatchMessageImportRoute(api huma.API) {
-	op := rawAPIV1Operation("importMessages", http.MethodPost, "/import/messages", "Import immutable documents into a versioned custom source")
+	op := rawAPIV1Operation("importMessages", http.MethodPost, "/import/messages", "Import documents or project archived emails into a versioned custom source")
 	op.RequestBody = jsonRequestBodyFor[batchmessageimport.ImportMessagesRequest](api)
 	setCodegenGoType(api.OpenAPI().Components.Schemas.Map()["ImportMessage"].Properties["metadata"], "map[string]any")
 	op.Responses = jsonResponsesFor[batchmessageimport.ImportMessagesResponse](api, http.StatusOK)
