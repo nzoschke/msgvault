@@ -8,4 +8,5 @@ export type ImportedMessageStatus =
 export const ImportedMessageStatus = {
   created: "created",
   unchanged: "unchanged",
+  updated: "updated",
 } as const;
