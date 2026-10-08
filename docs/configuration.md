@@ -1988,5 +1988,9 @@ Gmail sync, verification, repair, account registration, and daemon jobs use it
 instead of Google OAuth files. Restart a running daemon after changing these
 settings. Remove the table to return to ordinary OAuth configuration. Never put
 access tokens in this table. Protect the Unix socket and use an absolute path.
+External authentication uses the same `[sync].rate_limit_qps` setting and
+default fetch concurrency as ordinary Gmail authentication. The provider may
+apply its own shared quota limits.
+
 See [external Gmail commands](cli-reference.md#external-gmail-credentials) for
 initial backup, incremental sync, and cursor-preserving backfill examples.
