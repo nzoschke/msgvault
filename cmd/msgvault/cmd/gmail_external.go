@@ -21,7 +21,7 @@ func externalGmailClient(ctx context.Context, account string, state *invocation)
 	client, err := gmail.NewExternalClient(gmail.ExternalIn{
 		Account: account, Endpoint: external.Endpoint,
 		CredentialSocket: external.CredentialSocket, IncludeSpamTrash: external.IncludeSpamTrash,
-	}, gmail.WithLogger(state.logger), gmail.WithConcurrency(2), gmail.WithRateLimiter(gmail.NewRateLimiter(float64(min(cfg.Sync.RateLimitQPS, 2)))))
+	}, gmail.WithLogger(state.logger), gmail.WithRateLimiter(gmail.NewRateLimiter(float64(cfg.Sync.RateLimitQPS))))
 	if err != nil {
 		return nil, err
 	}
