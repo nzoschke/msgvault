@@ -196,6 +196,8 @@ import type {
   GetSettingsPeopleCodexLoginPathParameters,
   GetSettingsPeopleCodexModelsPathParameters,
   GetSubAggregatesParams,
+  GetSyncRunResultsParams,
+  GetSyncRunResultsPathParameters,
   GetTextAggregatesParams,
   GetTextStatsParams,
   GetTotalStatsParams,
@@ -454,6 +456,7 @@ import type {
   SyncCLIParams,
   SyncFullCLIParams,
   SyncResult,
+  SyncRunResults,
   TaskIntegrationStatusResponse,
   TaskLinkLookupResponse,
   TaskLinkMutationRequest,
@@ -4423,6 +4426,23 @@ export const getTotalStats = (
 ) => {
   return orvalFetch<TotalStatsResponse>(
     { url: `/api/v1/stats/total`, method: "GET", params },
+    options,
+  );
+};
+/**
+ * @summary List recorded message IDs and outcomes for a sync run
+ */
+export const getSyncRunResults = (
+  { id }: GetSyncRunResultsPathParameters,
+  params?: GetSyncRunResultsParams,
+  options?: SecondParameter<typeof orvalFetch<SyncRunResults>>,
+) => {
+  return orvalFetch<SyncRunResults>(
+    {
+      url: `/api/v1/sync-runs/${encodeURIComponent(String(id))}/items`,
+      method: "GET",
+      params,
+    },
     options,
   );
 };

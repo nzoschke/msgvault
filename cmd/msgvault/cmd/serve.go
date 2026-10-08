@@ -4752,3 +4752,9 @@ func scheduledTeamsImportOptions(email string, cfg *config.Config) teams.ImportO
 func (a *storeAPIAdapter) GetSearchMetadata(ctx context.Context, ids []int64, q *search.Query, includeSnippet bool) (map[int64]store.SearchMetadata, error) {
 	return a.store.GetSearchMetadata(ctx, ids, q, includeSnippet)
 }
+
+var _ api.SyncRunResultsStore = (*storeAPIAdapter)(nil)
+
+func (a *storeAPIAdapter) ListSyncRunResults(ctx context.Context, syncID, afterID int64, limit int) (*store.SyncRunResults, error) {
+	return a.store.ListSyncRunResults(ctx, syncID, afterID, limit)
+}

@@ -4061,6 +4061,14 @@ type GetTotalStatsResponse = TotalStatsResponse
 
 type GetTotalStatsErrorResponse = ErrorResponse
 
+type GetSyncRunResultsResponse = SyncRunResults
+
+type GetSyncRunResultsErrorResponse = ErrorResponse
+
+type GetSyncRunResultsErrorResponseJSON = ErrorResponse
+
+type GetSyncRunResultsErrorResponseJSON503 = ErrorResponse
+
 type TriggerSyncResponseJSON = TriggerSyncResponse
 
 type TriggerSyncErrorResponse = ErrorResponse
@@ -7792,6 +7800,16 @@ type GetTotalStatsResp struct {
 	StatusCode   int
 	JSON200      *GetTotalStatsResponse
 	JSONDefault  *GetTotalStatsErrorResponse
+}
+
+type GetSyncRunResultsResp struct {
+	HTTPResponse *http.Response
+	Body         []byte
+	StatusCode   int
+	JSON200      *GetSyncRunResultsResponse
+	JSON400      *GetSyncRunResultsErrorResponse
+	JSON404      *GetSyncRunResultsErrorResponseJSON
+	JSON503      *GetSyncRunResultsErrorResponseJSON503
 }
 
 type TriggerSyncResp struct {
