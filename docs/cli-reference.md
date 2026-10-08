@@ -5921,3 +5921,13 @@ Google bills Places separately from the free GoPlaces software. Autocomplete
 and Details requests have separate free monthly usage caps; incomplete or
 abandoned sessions are charged per request. Check current [Google pricing](https://developers.google.com/maps/billing-and-pricing/pricing)
 and [session pricing](https://developers.google.com/maps/documentation/places/web-service/session-pricing).
+
+### Correlating full sync attempts
+
+`sync-full ACCOUNT --operation-id ID` reserves a unique caller-supplied operation
+before syncing. Use 1–128 ASCII letters, digits, underscores or hyphens and a new
+ID for each attempt. An exact account or `--source-id` is required. The operation
+and its `sync_runs.operation_id` links survive CLI interruption; successful,
+failed and retried attempts can be attributed without matching timestamps.
+Reusing an operation ID or syncing a busy source returns a conflict. This option
+requires daemon API schema 3.7.0 or newer.

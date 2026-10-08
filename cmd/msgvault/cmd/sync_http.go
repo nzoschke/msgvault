@@ -52,6 +52,7 @@ func runSyncFullHTTP(cmd *cobra.Command, args []string) error {
 		BuildCache:   force,
 		NoBuildCache: skip,
 		Full:         true,
+		OperationID:  syncClientOperationID,
 		Query:        syncQuery,
 		NoResume:     syncNoResume,
 		Before:       syncBefore,
