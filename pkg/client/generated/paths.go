@@ -929,6 +929,15 @@ type ListSourceIdentitiesPath struct {
 	SourceID int64 `json:"source_id"`
 }
 
+type GetSyncRunResultsPath struct {
+	// ID Numeric sync run ID
+	ID string `json:"id" validate:"required"`
+}
+
+func (g GetSyncRunResultsPath) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(g))
+}
+
 type TriggerSyncPath struct {
 	// Account Account email or configured source identifier
 	Account string `json:"account" validate:"required"`

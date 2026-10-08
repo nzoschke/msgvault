@@ -16,6 +16,7 @@ import (
 	"go.kenn.io/kit/daemon"
 	"go.kenn.io/msgvault/internal/deletion"
 	"go.kenn.io/msgvault/internal/query"
+	"go.kenn.io/msgvault/internal/store"
 	"go.kenn.io/msgvault/internal/vector/visual"
 )
 
@@ -362,6 +363,7 @@ func (s *Server) registerHumaRoutes(api huma.API, apiV1 huma.API) {
 	registerAPIV1RawHumaJSONRoute[cliAccountsResponse](apiV1, "listCLIAccounts", http.MethodGet, "/cli/accounts", "List accounts for CLI output", s.handleCLIAccounts)
 	registerAPIV1RawHumaJSONRoute[cliCacheStatsResponse](apiV1, "getCLICacheStats", http.MethodGet, "/cli/cache-stats", "Get CLI-compatible analytics cache statistics", s.handleCLICacheStats)
 	registerAPIV1RawHumaNDJSONRoute[CLICacheBuildEvent](apiV1, "buildCLICache", http.MethodPost, "/cli/build-cache", "Build the CLI analytics cache", s.handleCLIBuildCache)
+	registerAPIV1RawHumaJSONRouteWithErrors[store.SyncRunResults](apiV1, "getSyncRunResults", http.MethodGet, "/sync-runs/{id}/items", "List recorded message IDs and outcomes for a sync run", s.handleSyncRunResults, http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable)
 	registerAPIV1RawHumaNDJSONRoute[CLISyncEvent](apiV1, "syncCLI", http.MethodPost, "/cli/sync", "Run CLI incremental sync", s.handleCLISync)
 	registerAPIV1RawHumaNDJSONRoute[CLISyncEvent](apiV1, "syncFullCLI", http.MethodPost, "/cli/sync-full", "Run CLI full sync", s.handleCLISyncFull)
 	registerAPIV1RawHumaNDJSONRouteWithRequest[CLIRepairMessageRequest, CLIRepairMessageEvent](apiV1, "repairMessageCLI", http.MethodPost, "/cli/repair-message", "Repair or audit Gmail message snapshots", s.handleCLIRepairMessage)
@@ -778,6 +780,12 @@ func rawRouteParameters(operationID string) []*huma.Param {
 			startedBefore,
 			limit,
 			queryStringParam("cursor", "Opaque cursor bound to this archive and the complete normalized filter set", false),
+		}
+	case "getSyncRunResults":
+		return []*huma.Param{
+			pathStringParam("id", "Numeric sync run ID"),
+			queryIntegerParam("after_id", "Exclusive item ID cursor (default 0)"),
+			queryIntegerParam("limit", "Maximum items (default 100, max 1000)"),
 		}
 	case "getOperationRun":
 		return []*huma.Param{pathStringParam("id", "Opaque archive-bound operation run ID")}

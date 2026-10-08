@@ -4049,9 +4049,12 @@ func TestIncrementalSyncDedupesMessageAddedAndLabelAddedForSameUnknownMessage(t 
 
 	run, err := env.Store.GetLastSuccessfulSync(source.ID)
 	require.NoError(err, "GetLastSuccessfulSync")
-	itemCount, err := env.Store.CountSyncRunItems(run.ID, "")
+	itemCount, err := env.Store.CountSyncRunItems(run.ID, store.SyncRunItemStatusError)
 	require.NoError(err, "CountSyncRunItems")
-	assert.Zero(itemCount, "sync_run_items")
+	assert.Zero(itemCount, "sync errors")
+	successCount, err := env.Store.CountSyncRunItems(run.ID, store.SyncRunItemStatusSuccess)
+	require.NoError(err, "CountSyncRunItems success")
+	assert.Equal(int64(1), successCount, "one result for repeated history references")
 }
 
 func TestIncrementalSyncKeepsSiblingPayloadsDistinctWhenAddsRepeatAsLabelChanges(t *testing.T) {

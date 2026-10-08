@@ -724,8 +724,11 @@ starts a fresh listing. Failed message fetches and cancellation exit nonzero.
 `sync` and `sync-full` block until ingestion finishes. `--json` emits progress
 and a per-account terminal summary with `sync_run_id` and counts. The reported
 `final_history_id` is the provider's observed history ID, not necessarily the
-stored incremental cursor. Cache refresh is a separate daemon job. Runs do not
-retain a complete result set of every matching message.
+stored incremental cursor. Cache refresh is a separate daemon job. Successful
+archived message IDs, including already-present matches, are recorded per page
+for Gmail full and incremental syncs. Read them with the
+[sync run items API](api-server.md#get-apiv1sync-runsiditems), using the
+`sync_run_id` from the summary.
 
 External transport permits mailbox reads only. Provider writes and additional
 OAuth grants remain controlled by the external provider; msgvault cannot enable

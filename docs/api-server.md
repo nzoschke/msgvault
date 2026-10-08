@@ -2125,6 +2125,38 @@ Repeated triggers never run the job concurrently. A generic-job trigger does not
 
 ---
 
+### Sync run message IDs {#get-apiv1sync-runsiditems}
+
+**Endpoint:** `GET /api/v1/sync-runs/{id}/items?after_id=0&limit=100`
+
+Read the message IDs handled by a Gmail full or incremental sync using the
+numeric `sync_run_id` returned by `sync --json` or `sync-full --json`.
+This owner API uses the daemon's normal API-key authentication; delegated agent
+tokens cannot access it.
+
+Each item includes its `id`, `source_message_id`, `message_id`, `phase`, and
+`status`. Successful archived messages use `status: "success"`, including
+already-present matches. Existing `error` and exceptional `skipped` diagnostics
+retain their error fields. `message_id` resolves the current archive row and is
+omitted when that row is absent; the provider ID remains available.
+
+The response includes `sync_run_id`, `source_id`, `run_status`, `items`, and
+`next_after_id`. Pass `next_after_id` as `after_id` to read the next page. The
+limit defaults to 100 and accepts 1–1000. An empty page marks the current end;
+while `run_status` is `running`, poll again with the same cursor. Invalid
+parameters return 400 and an unknown run returns 404.
+
+Success rows are written in batches before advancing the page checkpoint.
+Repeating a page does not duplicate them. Failed or interrupted runs may have
+partial results. Old runs are not backfilled, and other importers retain their
+existing diagnostic-only behavior. These rows identify archived messages
+handled by sync, not every history event or source-deletion reconciliation.
+They do not distinguish newly added messages from updated or unchanged ones.
+Rows remain until their sync run is deleted, increasing archive size in
+proportion to the messages handled across retained runs.
+
+---
+
 ### Scheduler status {#get-apiv1schedulerstatus}
 
 **Endpoint:** `GET /api/v1/scheduler/status`

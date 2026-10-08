@@ -2435,6 +2435,10 @@ AFTER UPDATE ON sync_runs
 WHEN OLD.started_at IS NOT NEW.started_at OR OLD.status IS NOT NEW.status
 BEGIN UPDATE operation_history_state SET membership_revision = membership_revision + 1 WHERE singleton = 1; END;
 
+CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_message
+    ON sync_run_items(sync_run_id, source_message_id);
+CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_id
+    ON sync_run_items(sync_run_id, id);
 CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_status
     ON sync_run_items(sync_run_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_source_import_items_source_provider

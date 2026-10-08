@@ -12032,6 +12032,59 @@ func (o *GetTotalStatsRequestOptions) GetHeader() (map[string]string, error) {
 	return nil, nil
 }
 
+// GetSyncRunResultsRequestOptions is the options needed to make a request to GetSyncRunResults.
+type GetSyncRunResultsRequestOptions struct {
+	PathParams *GetSyncRunResultsPath
+	Query      *GetSyncRunResultsQuery
+}
+
+// Validate validates all the fields in the options.
+// Use it if fields validation was not run.
+func (o *GetSyncRunResultsRequestOptions) Validate() error {
+	var errors runtime.ValidationErrors
+
+	if o.PathParams != nil {
+		if v, ok := any(o.PathParams).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append("PathParams", err)
+			}
+		}
+	}
+
+	if o.Query != nil {
+		if v, ok := any(o.Query).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append("Query", err)
+			}
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+
+	return errors
+}
+
+// GetPathParams returns the path params as a map.
+func (o *GetSyncRunResultsRequestOptions) GetPathParams() (map[string]any, error) {
+	return runtime.AsMap[any](o.PathParams)
+}
+
+// GetQuery returns the query params as a map.
+func (o *GetSyncRunResultsRequestOptions) GetQuery() (map[string]any, error) {
+	return runtime.AsMap[any](o.Query)
+}
+
+// GetBody returns the payload in any type that can be marshalled to JSON by the client.
+func (o *GetSyncRunResultsRequestOptions) GetBody() any {
+	return nil
+}
+
+// GetHeader returns the headers as a map.
+func (o *GetSyncRunResultsRequestOptions) GetHeader() (map[string]string, error) {
+	return nil, nil
+}
+
 // TriggerSyncRequestOptions is the options needed to make a request to TriggerSync.
 type TriggerSyncRequestOptions struct {
 	PathParams *TriggerSyncPath

@@ -740,6 +740,7 @@ func TestOpenAPIExportsServerRouteTable(t *testing.T) {
 		"/api/v1/cli/cache-stats":                {"get"},
 		"/api/v1/cli/sync":                       {"post"},
 		"/api/v1/cli/sync-full":                  {"post"},
+		"/api/v1/sync-runs/{id}/items":           {"get"},
 		"/api/v1/cli/verify":                     {"post"},
 		"/api/v1/cli/repair-encoding":            {"post"},
 		"/api/v1/cli/message":                    {"get"},

@@ -1470,6 +1470,11 @@ func (s *Syncer) full(
 			return nil, err
 		}
 
+		if err := s.store.RecordSyncRunMessages(ctx, state.syncID, source.ID, result.acknowledged); err != nil {
+			s.failStoppedSync(state.syncID, err)
+			return nil, err
+		}
+
 		discoveryHealth.observe(s.runPageIdentityDiscovery(ctx, source.ID, result.sourceMessageIDs))
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			err := fmt.Errorf("sync canceled during identity discovery: %w", ctxErr)

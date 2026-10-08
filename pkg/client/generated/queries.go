@@ -1408,6 +1408,14 @@ type GetTotalStatsQuery struct {
 	EmptyTargets *string `json:"empty_targets,omitempty"`
 }
 
+type GetSyncRunResultsQuery struct {
+	// AfterID Exclusive item ID cursor (default 0)
+	AfterID *int64 `json:"after_id,omitempty"`
+
+	// Limit Maximum items (default 100, max 1000)
+	Limit *int64 `json:"limit,omitempty"`
+}
+
 type TriggerSyncQuery struct {
 	// SourceType Source type; required to trigger a generic (non-account) source
 	SourceType *string `json:"source_type,omitempty"`

@@ -1159,6 +1159,10 @@ type ClientInterface interface {
 	GetTotalStats(ctx context.Context, options *GetTotalStatsRequestOptions, reqEditors ...runtime.RequestEditorFn) (*GetTotalStatsResponse, error)
 	GetTotalStatsWithResponse(ctx context.Context, options *GetTotalStatsRequestOptions, reqEditors ...runtime.RequestEditorFn) (*GetTotalStatsResp, error)
 
+	// GetSyncRunResults List recorded message IDs and outcomes for a sync run
+	GetSyncRunResults(ctx context.Context, options *GetSyncRunResultsRequestOptions, reqEditors ...runtime.RequestEditorFn) (*GetSyncRunResultsResponse, error)
+	GetSyncRunResultsWithResponse(ctx context.Context, options *GetSyncRunResultsRequestOptions, reqEditors ...runtime.RequestEditorFn) (*GetSyncRunResultsResp, error)
+
 	// TriggerSync Trigger account sync
 	TriggerSync(ctx context.Context, options *TriggerSyncRequestOptions, reqEditors ...runtime.RequestEditorFn) (*TriggerSyncResponseJSON, error)
 	TriggerSyncWithResponse(ctx context.Context, options *TriggerSyncRequestOptions, reqEditors ...runtime.RequestEditorFn) (*TriggerSyncResp, error)
@@ -18587,6 +18591,69 @@ func (c *Client) GetTotalStats(ctx context.Context, options *GetTotalStatsReques
 	}
 
 	resp, err := c.apiClient.ExecuteRequest(ctx, req, "/api/v1/stats/total")
+	if err != nil {
+		return nil, fmt.Errorf("error executing request: %w", err)
+	}
+	return responseParser(ctx, resp)
+}
+
+// GetSyncRunResults List recorded message IDs and outcomes for a sync run
+func (c *Client) GetSyncRunResults(ctx context.Context, options *GetSyncRunResultsRequestOptions, reqEditors ...runtime.RequestEditorFn) (*GetSyncRunResultsResponse, error) {
+	var err error
+	reqParams := runtime.RequestOptionsParameters{
+		RequestURL: c.apiClient.GetBaseURL() + "/api/v1/sync-runs/{id}/items",
+		Method:     "GET",
+		Options:    options,
+	}
+
+	req, err := c.apiClient.CreateRequest(ctx, reqParams, reqEditors...)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	responseParser := func(ctx context.Context, resp *runtime.Response) (*GetSyncRunResultsResponse, error) {
+		bodyBytes := resp.Content
+		if resp.StatusCode != 200 {
+			target := new(GetSyncRunResultsErrorResponse)
+			// Handle empty error response body gracefully - skip unmarshal if no content
+			if len(bodyBytes) > 0 {
+				if err = json.Unmarshal(bodyBytes, target); err != nil {
+					return nil, &runtime.ResponseDecodeError{
+						StatusCode:    resp.StatusCode,
+						ContentType:   resp.Headers.Get("Content-Type"),
+						ContentLength: len(bodyBytes),
+						TargetType:    "GetSyncRunResultsErrorResponse",
+						Body:          bodyBytes,
+						Err:           err,
+					}
+				}
+			}
+			// Return error with (possibly empty) target
+			if errTarget, ok := any(*target).(error); ok {
+				return nil, runtime.NewClientAPIError(errTarget, runtime.WithStatusCode(resp.StatusCode))
+			}
+			return nil, runtime.NewClientAPIError(fmt.Errorf("API error (status %d): %v", resp.StatusCode, *target),
+				runtime.WithStatusCode(resp.StatusCode))
+		}
+		target := new(GetSyncRunResultsResponse)
+		// Handle empty response body gracefully
+		if len(bodyBytes) == 0 {
+			return target, nil
+		}
+		if err = json.Unmarshal(bodyBytes, target); err != nil {
+			return nil, &runtime.ResponseDecodeError{
+				StatusCode:    resp.StatusCode,
+				ContentType:   resp.Headers.Get("Content-Type"),
+				ContentLength: len(bodyBytes),
+				TargetType:    "GetSyncRunResultsResponse",
+				Body:          bodyBytes,
+				Err:           err,
+			}
+		}
+		return target, nil
+	}
+
+	resp, err := c.apiClient.ExecuteRequest(ctx, req, "/api/v1/sync-runs/{id}/items")
 	if err != nil {
 		return nil, fmt.Errorf("error executing request: %w", err)
 	}

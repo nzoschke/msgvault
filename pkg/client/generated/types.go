@@ -13414,6 +13414,46 @@ func (s SyncRunItemStatus) Validate() error {
 	return runtime.ConvertValidatorError(typesValidator.Struct(s))
 }
 
+type SyncRunResult struct {
+	ErrorKind       *string `json:"error_kind,omitzero"`
+	ErrorMessage    *string `json:"error_message,omitzero"`
+	ID              int64   `json:"id"`
+	MessageID       *int64  `json:"message_id,omitempty"`
+	Phase           string  `json:"phase" validate:"required"`
+	SourceMessageID string  `json:"source_message_id" validate:"required"`
+	Status          string  `json:"status" validate:"required"`
+}
+
+func (s SyncRunResult) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(s))
+}
+
+type SyncRunResults struct {
+	Items       []SyncRunResult `json:"items" validate:"required"`
+	NextAfterID int64           `json:"next_after_id"`
+	RunStatus   string          `json:"run_status" validate:"required"`
+	SourceID    int64           `json:"source_id"`
+	SyncRunID   int64           `json:"sync_run_id"`
+}
+
+func (s SyncRunResults) Validate() error {
+	var errors runtime.ValidationErrors
+	for i, item := range s.Items {
+		if v, ok := any(item).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append(fmt.Sprintf("Items[%d]", i), err)
+			}
+		}
+	}
+	if err := typesValidator.Var(s.RunStatus, "required"); err != nil {
+		errors = errors.Append("RunStatus", err)
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
 type SyncRunStatus struct {
 	CompletedAt       *string             `json:"completed_at,omitzero" validate:"required"`
 	ErrorMessage      *string             `json:"error_message,omitzero" validate:"required"`

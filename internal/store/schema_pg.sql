@@ -4039,6 +4039,10 @@ CREATE TRIGGER trg_operation_history_source_update AFTER UPDATE ON sync_runs
 FOR EACH ROW WHEN (OLD.started_at IS DISTINCT FROM NEW.started_at OR OLD.status IS DISTINCT FROM NEW.status)
 EXECUTE FUNCTION advance_operation_history_membership_revision();
 
+CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_message
+    ON sync_run_items(sync_run_id, source_message_id);
+CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_id
+    ON sync_run_items(sync_run_id, id);
 CREATE INDEX IF NOT EXISTS idx_sync_run_items_run_status
     ON sync_run_items(sync_run_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_source_import_items_source_provider

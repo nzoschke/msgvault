@@ -282,6 +282,10 @@ func (s *Syncer) incremental(
 				identityDiscoveryIDs = append(identityDiscoveryIDs, id)
 			}
 			sort.Strings(identityDiscoveryIDs)
+			if err := s.store.RecordSyncRunMessages(ctx, syncID, source.ID, identityDiscoveryIDs); err != nil {
+				s.failStoppedSync(syncID, err)
+				return nil, err
+			}
 			discoveryHealth.observe(s.runPageIdentityDiscovery(ctx, source.ID, identityDiscoveryIDs))
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				err := fmt.Errorf("sync canceled during identity discovery: %w", ctxErr)
@@ -427,6 +431,9 @@ func (s *Syncer) replayFetchFailures(
 			checkpoint.MessagesAdded++
 			summary.BytesDownloaded += int64(len(result.Message.Raw))
 			successfulIDs = append(successfulIDs, messageID)
+		}
+		if err := s.store.RecordSyncRunMessages(ctx, syncID, sourceID, batchIDs); err != nil {
+			return nil, err
 		}
 		if err := s.store.UpdateSyncCheckpoint(syncID, checkpoint); err != nil {
 			return nil, fmt.Errorf("checkpoint replay batch: %w", err)
