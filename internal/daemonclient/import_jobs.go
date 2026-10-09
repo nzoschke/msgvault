@@ -5,10 +5,11 @@ import (
 	"errors"
 	apiclient "go.kenn.io/msgvault/pkg/client"
 	"go.kenn.io/msgvault/pkg/client/generated"
+	"net/http"
 )
 
 func (c *Client) CreateImportJob(ctx context.Context, in generated.ImportJobRequest) (*generated.ImportJobResponse, error) {
-	response, err := APIResponse(c, func(client *apiclient.Client) (*generated.CreateImportJobResp, error) {
+	response, err := APIResponseWithStatuses(c, []int{http.StatusAccepted}, func(client *apiclient.Client) (*generated.CreateImportJobResp, error) {
 		return client.CreateImportJobWithResponse(ctx, &generated.CreateImportJobRequestOptions{Body: &in})
 	})
 	if err != nil {
