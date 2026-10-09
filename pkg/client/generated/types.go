@@ -5748,11 +5748,12 @@ func (i ImportEntry) Validate() error {
 }
 
 type ImportJobRequest struct {
-	Account  string  `json:"account" validate:"required,min=1"`
-	After    *string `json:"after,omitzero"`
-	Before   *string `json:"before,omitzero"`
-	Limit    *int64  `json:"limit,omitempty" validate:"omitempty,gte=0"`
-	Noresume *bool   `json:"noresume,omitempty"`
+	Account     string  `json:"account" validate:"required,min=1"`
+	After       *string `json:"after,omitzero"`
+	Before      *string `json:"before,omitzero"`
+	Limit       *int64  `json:"limit,omitempty" validate:"omitempty,gte=0"`
+	Noresume    *bool   `json:"noresume,omitempty"`
+	OperationID *string `json:"operation_id,omitzero" validate:"omitempty,max=128"`
 
 	// Query Gmail search query; not supported for IMAP sources
 	Query *string `json:"query,omitzero"`
@@ -5771,9 +5772,11 @@ type ImportJobResponse struct {
 	JobID      string                  `json:"job_id" validate:"required"`
 	Processed  int64                   `json:"processed"`
 	Skipped    int64                   `json:"skipped"`
+	SourceID   int64                   `json:"source_id"`
 	StartedAt  *time.Time              `json:"started_at,omitempty" validate:"required"`
 	Status     ImportJobResponseStatus `json:"status" validate:"required"`
 	Summary    *ImportJobSummary       `json:"summary,omitempty"`
+	SyncRunIds []int64                 `json:"sync_run_ids" validate:"required"`
 }
 
 func (i ImportJobResponse) Validate() error {
@@ -5808,6 +5811,9 @@ func (i ImportJobResponse) Validate() error {
 				errors = errors.Append("Summary", err)
 			}
 		}
+	}
+	if err := typesValidator.Var(i.SyncRunIds, "required"); err != nil {
+		errors = errors.Append("SyncRunIds", err)
 	}
 	if len(errors) == 0 {
 		return nil

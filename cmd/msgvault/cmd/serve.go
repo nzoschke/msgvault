@@ -4430,3 +4430,7 @@ var _ api.SyncRunResultsStore = (*storeAPIAdapter)(nil)
 func (a *storeAPIAdapter) ListSyncRunResults(ctx context.Context, syncID, afterID int64, limit int) (*store.SyncRunResults, error) {
 	return a.store.ListSyncRunResults(ctx, syncID, afterID, limit)
 }
+
+func (a *storeAPIAdapter) CreateImportOperation(sourceID int64, operationID, fingerprint string) (*store.SyncOperation, bool, error) {
+	return a.store.CreateImportOperation(sourceID, operationID, fingerprint)
+}

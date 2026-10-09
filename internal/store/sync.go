@@ -592,13 +592,14 @@ func (s *Store) recoverAbandonedSyncSourceQueries(
 // SyncOperation is the durable status of one higher-level sync invocation.
 // A Gmail history recovery can contribute more than one SyncRun.
 type SyncOperation struct {
-	ID         string
-	SourceID   int64
-	Status     string
-	CreatedAt  time.Time
-	StartedAt  sql.NullTime
-	FinishedAt sql.NullTime
-	Runs       []*SyncRun
+	RequestFingerprint string
+	ID                 string
+	SourceID           int64
+	Status             string
+	CreatedAt          time.Time
+	StartedAt          sql.NullTime
+	FinishedAt         sql.NullTime
+	Runs               []*SyncRun
 }
 
 func (s *Store) rejectConflictingSyncOperation(
@@ -624,9 +625,41 @@ func (s *Store) rejectConflictingSyncOperation(
 
 // CreateSyncOperation reserves a source for a pending higher-level sync
 // invocation before its worker starts.
-func (s *Store) CreateSyncOperation(
-	sourceID int64, operationID string,
-) (operation *SyncOperation, retErr error) {
+func (s *Store) CreateSyncOperation(sourceID int64, operationID string) (*SyncOperation, error) {
+	return s.createSyncOperation(sourceID, operationID, "")
+}
+
+var ErrImportOperationConflict = errors.New("import operation ID has a different request")
+
+func (s *Store) CreateImportOperation(sourceID int64, operationID, fingerprint string) (*SyncOperation, bool, error) {
+	existing := func() (*SyncOperation, bool, error) {
+		op, err := s.GetSyncOperation(operationID)
+		if err != nil {
+			return nil, false, err
+		}
+		if op.SourceID != sourceID || op.RequestFingerprint != fingerprint {
+			return nil, false, ErrImportOperationConflict
+		}
+		return op, false, nil
+	}
+	if _, err := s.GetSyncOperation(operationID); err == nil {
+		return existing()
+	} else if !errors.Is(err, ErrSyncRunNotFound) {
+		return nil, false, err
+	}
+	op, err := s.createSyncOperation(sourceID, operationID, fingerprint)
+	if err != nil {
+		if recovered, _, getErr := existing(); getErr == nil {
+			return recovered, false, nil
+		} else if errors.Is(getErr, ErrImportOperationConflict) {
+			return nil, false, getErr
+		}
+		return nil, false, err
+	}
+	return op, true, nil
+}
+
+func (s *Store) createSyncOperation(sourceID int64, operationID, fingerprint string) (operation *SyncOperation, retErr error) {
 	if operationID == "" {
 		return nil, errors.New("create sync operation: empty operation ID")
 	}
@@ -652,10 +685,10 @@ func (s *Store) CreateSyncOperation(
 			return err
 		}
 		return tx.QueryRow(fmt.Sprintf(`
-			INSERT INTO sync_operations (id, source_id, status, created_at)
-			VALUES (?, ?, 'pending', %s)
+			INSERT INTO sync_operations (id, source_id, request_fingerprint, status, created_at)
+			VALUES (?, ?, ?, 'pending', %s)
 			RETURNING created_at
-		`, s.dialect.Now()), operationID, sourceID).Scan(&createdAt)
+		`, s.dialect.Now()), operationID, sourceID, fingerprint).Scan(&createdAt)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create sync operation %q: %w", operationID, err)
@@ -665,7 +698,7 @@ func (s *Store) CreateSyncOperation(
 		return nil, fmt.Errorf("create sync operation %q: %w", operationID, err)
 	}
 	return &SyncOperation{
-		ID: operationID, SourceID: sourceID, Status: "pending", CreatedAt: created,
+		ID: operationID, SourceID: sourceID, RequestFingerprint: fingerprint, Status: "pending", CreatedAt: created,
 	}, nil
 }
 
@@ -718,11 +751,11 @@ func (s *Store) getSyncOperation(operationID string) (*SyncOperation, error) {
 	op := &SyncOperation{ID: operationID}
 	var createdAt sql.NullTime
 	err := s.db.QueryRow(`
-		SELECT source_id, status, created_at, started_at, finished_at
+		SELECT source_id, status, created_at, started_at, finished_at, COALESCE(request_fingerprint,'')
 		FROM sync_operations
 		WHERE id = ?
 	`, operationID).Scan(
-		&op.SourceID, &op.Status, &createdAt, &op.StartedAt, &op.FinishedAt,
+		&op.SourceID, &op.Status, &createdAt, &op.StartedAt, &op.FinishedAt, &op.RequestFingerprint,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("sync operation %q: %w", operationID, ErrSyncRunNotFound)

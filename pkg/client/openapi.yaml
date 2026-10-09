@@ -6166,6 +6166,10 @@ components:
           type: integer
         noresume:
           type: boolean
+        operation_id:
+          maxLength: 128
+          pattern: ^[a-zA-Z0-9_-]+$
+          type: string
         query:
           description: Gmail search query; not supported for IMAP sources
           type: string
@@ -6196,6 +6200,9 @@ components:
         skipped:
           format: int64
           type: integer
+        source_id:
+          format: int64
+          type: integer
         started_at:
           format: date-time
           nullable: true
@@ -6214,7 +6221,14 @@ components:
             - ImportJobResponseStatusFailed
         summary:
           $ref: "#/components/schemas/ImportJobSummary"
+        sync_run_ids:
+          items:
+            format: int64
+            type: integer
+          type: array
       required:
+        - source_id
+        - sync_run_ids
         - job_id
         - account
         - status
@@ -14822,7 +14836,7 @@ components:
       type: apiKey
 info:
   title: msgvault API
-  version: 3.9.0
+  version: 3.10.0
 openapi: 3.0.3
 paths:
   /api/daemon/identity:

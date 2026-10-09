@@ -1969,6 +1969,7 @@ CREATE TABLE IF NOT EXISTS visual_work_claims (
 -- multiple sync runs, such as full enumeration followed by history catch-up.
 CREATE TABLE IF NOT EXISTS sync_operations (
     id TEXT PRIMARY KEY,
+    request_fingerprint TEXT,
     source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'done', 'failed')),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -670,6 +670,7 @@ func (d *PostgreSQLDialect) LegacyColumnMigrations() []ColumnMigration {
 		{`ALTER TABLE carddav_conflicts ADD COLUMN IF NOT EXISTS previous_mapping_revision BIGINT`, "carddav_conflicts.previous_mapping_revision"},
 		{`ALTER TABLE carddav_conflicts ADD COLUMN IF NOT EXISTS pending_started_at TIMESTAMPTZ`, "carddav_conflicts.pending_started_at"},
 		{`ALTER TABLE sources ADD COLUMN IF NOT EXISTS sync_config JSONB`, "sync_config"},
+		{`ALTER TABLE sync_operations ADD COLUMN IF NOT EXISTS request_fingerprint TEXT`, "sync_operations.request_fingerprint"},
 		{`ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS sync_type TEXT NOT NULL DEFAULT ''`, "sync_runs.sync_type"},
 		{`ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS request_fingerprint TEXT`, "sync_runs.request_fingerprint"},
 		{`ALTER TABLE sync_runs ADD COLUMN IF NOT EXISTS operation_id TEXT`, "sync_runs.operation_id"},

@@ -1719,6 +1719,7 @@ CREATE TABLE IF NOT EXISTS visual_work_claims (
 
 CREATE TABLE IF NOT EXISTS sync_operations (
     id TEXT PRIMARY KEY,
+    request_fingerprint TEXT,
     source_id BIGINT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'done', 'failed')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,

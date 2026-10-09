@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
@@ -27,12 +28,13 @@ var (
 )
 
 type ImportJobRequest struct {
-	Account  string `json:"account" minLength:"1"`
-	After    string `json:"after,omitempty" pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"`
-	Before   string `json:"before,omitempty" pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"`
-	Limit    int    `json:"limit,omitzero" minimum:"0"`
-	Query    string `json:"query,omitempty" doc:"Gmail search query; not supported for IMAP sources"`
-	NoResume bool   `json:"noresume,omitzero"`
+	OperationID string `json:"operation_id,omitempty" maxLength:"128" pattern:"^[a-zA-Z0-9_-]+$"`
+	Account     string `json:"account" minLength:"1"`
+	After       string `json:"after,omitempty" pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"`
+	Before      string `json:"before,omitempty" pattern:"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"`
+	Limit       int    `json:"limit,omitzero" minimum:"0"`
+	Query       string `json:"query,omitempty" doc:"Gmail search query; not supported for IMAP sources"`
+	NoResume    bool   `json:"noresume,omitzero"`
 }
 
 type ImportJobSummary struct {
@@ -44,6 +46,8 @@ type ImportJobSummary struct {
 }
 
 type ImportJobResponse struct {
+	SourceID   int64             `json:"source_id"`
+	SyncRunIDs []int64           `json:"sync_run_ids"`
 	JobID      string            `json:"job_id"`
 	Account    string            `json:"account"`
 	Status     string            `json:"status" enum:"pending,running,done,failed"`
@@ -62,6 +66,7 @@ type importJobStore interface {
 	GetSourceByID(id int64) (*store.Source, error)
 	CreateSyncOperation(sourceID int64, operationID string) (*store.SyncOperation, error)
 	GetSyncOperation(operationID string) (*store.SyncOperation, error)
+	CreateImportOperation(sourceID int64, operationID, fingerprint string) (*store.SyncOperation, bool, error)
 }
 
 func (s *Server) registerImportJobRoutes(api huma.API) {
@@ -126,7 +131,10 @@ func (s *Server) handleCreateImportJob(w http.ResponseWriter, r *http.Request) {
 		writeOperationGateBusy(w, r, s.operationGate)
 		return
 	}
-	jobID, err := newImportJobID()
+	jobID := req.OperationID
+	if jobID == "" {
+		jobID, err = newImportJobID()
+	}
 	if err != nil {
 		release()
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to create import job")
@@ -153,11 +161,19 @@ func (s *Server) handleCreateImportJob(w http.ResponseWriter, r *http.Request) {
 	}
 	s.importWG.Add(1)
 	s.importMu.Unlock()
-	op, err := jobStore.CreateSyncOperation(source.ID, jobID)
+	fingerprintRequest := req
+	fingerprintRequest.Account, fingerprintRequest.OperationID = "", ""
+	fingerprintJSON, _ := json.Marshal(fingerprintRequest)
+	fingerprint := fmt.Sprintf("%x", sha256.Sum256(fingerprintJSON))
+	op, created, err := jobStore.CreateImportOperation(source.ID, jobID, fingerprint)
 	if err != nil {
 		s.importWG.Done()
 		finishIdleWork()
 		release()
+		if errors.Is(err, store.ErrImportOperationConflict) {
+			writeError(w, http.StatusConflict, "operation_conflict", "Operation ID belongs to a different import request")
+			return
+		}
 		if errors.Is(err, store.ErrSyncAlreadyActive) {
 			writeError(w, http.StatusConflict, "sync_already_active", "Import account already has an active sync")
 			return
@@ -166,15 +182,21 @@ func (s *Server) handleCreateImportJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to create import job")
 		return
 	}
-	go func() {
-		defer s.importWG.Done()
-		defer finishIdleWork()
-		defer release()
-		err := runner.RunCLISync(s.importContext, runReq, func(CLISyncEvent) error { return nil })
-		if err != nil {
-			s.logger.Error("historical import failed", "job_id", jobID, "error", err)
-		}
-	}()
+	if created {
+		go func() {
+			defer s.importWG.Done()
+			defer finishIdleWork()
+			defer release()
+			err := runner.RunCLISync(s.importContext, runReq, func(CLISyncEvent) error { return nil })
+			if err != nil {
+				s.logger.Error("historical import failed", "job_id", jobID, "error", err)
+			}
+		}()
+	} else {
+		s.importWG.Done()
+		finishIdleWork()
+		release()
+	}
 
 	response, err := importJobResponse(jobStore, op)
 	if err != nil {
@@ -202,6 +224,10 @@ func decodeImportJobRequest(w http.ResponseWriter, r *http.Request) (ImportJobRe
 		return ImportJobRequest{}, false
 	}
 	if !requireSingleJSONValue(w, decoder, "bad_request") {
+		return ImportJobRequest{}, false
+	}
+	if req.OperationID != "" && (len(req.OperationID) > 128 || strings.Trim(req.OperationID, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_") != "") {
+		writeError(w, http.StatusUnprocessableEntity, "validation_failed", "operation_id requires 1-128 ASCII letters, digits, hyphens or underscores")
 		return ImportJobRequest{}, false
 	}
 	req.Account = strings.TrimSpace(req.Account)
@@ -244,7 +270,7 @@ func importJobResponse(jobStore importJobStore, op *store.SyncOperation) (Import
 		return ImportJobResponse{}, err
 	}
 	response := ImportJobResponse{
-		JobID: op.ID, Account: source.Identifier, Status: op.Status,
+		JobID: op.ID, Account: source.Identifier, SourceID: op.SourceID, SyncRunIDs: []int64{}, Status: op.Status,
 		CreatedAt: op.CreatedAt.UTC(),
 	}
 	if op.StartedAt.Valid {
@@ -253,6 +279,7 @@ func importJobResponse(jobStore importJobStore, op *store.SyncOperation) (Import
 	}
 	var summary ImportJobSummary
 	for _, run := range op.Runs {
+		response.SyncRunIDs = append(response.SyncRunIDs, run.ID)
 		processed, added, skipped := importRunCounts(run)
 		summary.Processed += processed
 		summary.Added += added

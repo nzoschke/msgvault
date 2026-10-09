@@ -105,6 +105,24 @@ func (s *importJobTestStore) CreateSyncOperation(sourceID int64, id string) (*st
 	return &clone, nil
 }
 
+func (s *importJobTestStore) CreateImportOperation(sourceID int64, id, fingerprint string) (*store.SyncOperation, bool, error) {
+	if op, err := s.GetSyncOperation(id); err == nil {
+		if op.SourceID != sourceID || op.RequestFingerprint != fingerprint {
+			return nil, false, store.ErrImportOperationConflict
+		}
+		return op, false, nil
+	}
+	op, err := s.CreateSyncOperation(sourceID, id)
+	if err != nil {
+		return nil, false, err
+	}
+	s.mu.Lock()
+	s.operations[id].RequestFingerprint = fingerprint
+	s.mu.Unlock()
+	op.RequestFingerprint = fingerprint
+	return op, true, nil
+}
+
 func TestImportJobCreationDoesNotWaitForWorkerStartup(t *testing.T) {
 	t.Parallel()
 	assert := assert.New(t)
@@ -454,4 +472,39 @@ func TestGetImportJobReturnsNotFoundForUnknownID(t *testing.T) {
 	srv := NewServer(&config.Config{}, newImportJobTestStore(), nil, testLogger())
 	code, _, body := getImportJob(t, srv, "missing")
 	assert.Equal(t, http.StatusNotFound, code, body)
+}
+
+func TestImportJobIdempotentSubmission(t *testing.T) {
+	st := newImportJobTestStore()
+	defer st.finish()
+	srv := NewServer(&config.Config{}, st, nil, testLogger())
+	post := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/imports", strings.NewReader(body))
+		req.Header.Set("Content-Type", applicationJSONMediaType)
+		resp := httptest.NewRecorder()
+		srv.Router().ServeHTTP(resp, req)
+		return resp
+	}
+	body := `{"account":"archive@example.com","query":"newer_than:2d","operation_id":"durable-id"}`
+	first := post(body)
+	require.Equal(t, 202, first.Code, first.Body.String())
+	<-st.started
+	second := post(body)
+	require.Equal(t, 202, second.Code, second.Body.String())
+	var response ImportJobResponse
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &response))
+	assert.Equal(t, "durable-id", response.JobID)
+	assert.Equal(t, int64(42), response.SourceID)
+	assert.Equal(t, []int64{100}, response.SyncRunIDs)
+	conflict := post(strings.Replace(body, "newer_than:2d", "newer_than:3d", 1))
+	assert.Equal(t, 409, conflict.Code)
+	select {
+	case <-st.entered:
+	default:
+	}
+	select {
+	case <-st.entered:
+		assert.Fail(t, "duplicate worker launched")
+	default:
+	}
 }

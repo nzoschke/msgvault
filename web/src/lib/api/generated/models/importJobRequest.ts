@@ -12,6 +12,11 @@ export interface ImportJobRequest {
   /** @minimum 0 */
   limit?: number;
   noresume?: boolean;
+  /**
+   * @maxLength 128
+   * @pattern ^[a-zA-Z0-9_-]+$
+   */
+  operation_id?: string;
   /** Gmail search query; not supported for IMAP sources */
   query?: string;
 }

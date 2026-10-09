@@ -4468,3 +4468,19 @@ and its `sync_runs.operation_id` links survive CLI interruption; successful,
 failed and retried attempts can be attributed without matching timestamps.
 Reusing an operation ID or syncing a busy source returns a conflict. This option
 requires daemon API schema 3.7.0 or newer.
+
+### import-job
+
+Start a bounded historical import without keeping a CLI process alive:
+
+```sh
+printf '%s' '{"account":"archive@example.com","after":"2026-10-01","before":"2026-10-08","noresume":true,"operation_id":"experiment-1"}' | msgvault import-job start
+msgvault import-job status experiment-1
+```
+
+The JSON response includes `job_id`, `status`, `source_id`, and `sync_run_ids`.
+Poll until `done` or `failed`. The daemon owns the job independently of the client.
+Repeating the same operation ID and filters returns the existing job; changing
+filters or the source returns a conflict. A failed job remains failed: supply a
+new operation ID to start another attempt. Daemon restarts mark unfinished jobs
+failed. These commands use `POST /api/v1/imports` and `GET /api/v1/imports/{job_id}`.

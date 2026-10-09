@@ -1227,3 +1227,24 @@ func TestStore_InterruptSyncWithCheckpoint(t *testing.T) {
 		})
 	}
 }
+
+func TestStore_ImportOperationIdempotency(t *testing.T) {
+	f := storetest.New(t)
+	op, created, err := f.Store.CreateImportOperation(f.Source.ID, "retry-id", "filters-v1")
+	require.NoError(t, err)
+	assert.True(t, created)
+	again, created, err := f.Store.CreateImportOperation(f.Source.ID, "retry-id", "filters-v1")
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, op.ID, again.ID)
+	_, _, err = f.Store.CreateImportOperation(f.Source.ID, "retry-id", "filters-v2")
+	assert.ErrorIs(t, err, store.ErrImportOperationConflict)
+	require.NoError(t, f.Store.FinishSyncOperation(op.ID, "failed"))
+	again, created, err = f.Store.CreateImportOperation(f.Source.ID, "retry-id", "filters-v1")
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, "failed", again.Status)
+	_, created, err = f.Store.CreateImportOperation(f.Source.ID, "retry-id-2", "filters-v1")
+	require.NoError(t, err)
+	assert.True(t, created)
+}
