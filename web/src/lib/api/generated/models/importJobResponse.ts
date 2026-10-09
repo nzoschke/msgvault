@@ -14,9 +14,11 @@ export interface ImportJobResponse {
   job_id: string;
   processed: number;
   skipped: number;
+  source_id: number;
   /** @nullable */
   started_at: string | null;
   status: ImportJobResponseStatus;
   summary?: ImportJobSummary;
+  sync_run_ids: number[];
   [key: string]: unknown;
 }
