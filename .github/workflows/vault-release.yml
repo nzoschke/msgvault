@@ -69,8 +69,8 @@ jobs:
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           scripts/build-vault-release.sh "$RELEASE_VERSION"
-          GOWORK=off go test -tags 'fts5 sqlite_vec' ./cmd/msgvault/cmd ./internal/sync ./internal/gmail \
-            -run 'Test(StandardExternal|SetupExternalGmail|ExternalSharedClient|QueryBackfill|External|InitialBackfill|Full.*(Cancel|Resume))' -count=1
+          GOWORK=off go test -tags 'fts5 sqlite_vec' ./cmd/msgvault/cmd ./internal/sync ./internal/gmail ./internal/api ./internal/store ./internal/daemonclient \
+            -run 'Test(StandardExternal|SetupExternalGmail|ExternalSharedClient|QueryBackfill|External|InitialBackfill|Full.*(Cancel|Resume)|.*(ImportMessages|MessageImport|SyncRunResults|SyncOperation|CLISyncOperation))' -count=1
           mkdir dist/unpacked
           tar -xzf dist/*.tar.gz -C dist/unpacked
           scripts/smoke-vault-release.sh dist/unpacked/msgvault
@@ -100,4 +100,4 @@ jobs:
         run: |
           cat *.sha256 > SHA256SUMS
           sha256sum --check SHA256SUMS
-          gh release create "$RELEASE_VERSION" *.tar.gz SHA256SUMS --verify-tag --prerelease --latest=false --title "$RELEASE_VERSION" --notes 'Linux CLI and daemon binaries with externally authenticated Gmail sync, bounded initial backfills with --after, and interrupted-sync recovery. Built from the tagged source on Ubuntu 22.04 for amd64 and arm64. Includes the embedded browser application and default-off semantic search through authenticated embedding proxies.'
+          gh release create "$RELEASE_VERSION" *.tar.gz SHA256SUMS --verify-tag --prerelease --latest=false --title "$RELEASE_VERSION" --notes 'Linux CLI and daemon binaries with externally authenticated Gmail sync, bounded initial backfills with --after, and interrupted-sync recovery. Built from the tagged source on Ubuntu 22.04 for amd64 and arm64. Includes successful-message sync results, caller-supplied sync operation IDs, email projections and document imports, the embedded browser application, and default-off semantic search through authenticated embedding proxies.'
