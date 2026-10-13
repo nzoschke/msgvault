@@ -1988,7 +1988,7 @@ func TestStoreAPIAdapterServesSourceStatus(t *testing.T) {
 	assert.Equal(store.SyncStatusCompleted, got.LastSuccessfulSync.Status, "LastSuccessfulSync.Status")
 }
 
-func TestStoreAPIAdapterRunCLISyncPacksOnlyAfterSubprocessSuccess(t *testing.T) {
+func TestStoreAPIAdapterRunCLISyncDefersPackAfterSubprocessSuccess(t *testing.T) {
 	tests := []struct {
 		name           string
 		predecessorErr error
@@ -2030,10 +2030,13 @@ func TestStoreAPIAdapterRunCLISyncPacksOnlyAfterSubprocessSuccess(t *testing.T) 
 				require.NoError(err)
 			}
 			assert.Equal(1, runnerCalls)
+			assert.Nil(f.packedEntry(hash), "sync must not pack inline")
+			assert.NotContains(f.logs.String(), "automatic attachment maintenance")
+			assert.Empty(events, "deferred maintenance writes no CLI output")
+			require.NoError(f.maintenance.runPendingPack(context.Background()))
 			assert.Equal(tt.wantPacked, f.packedEntry(hash) != nil)
 			assert.Equal(tt.wantAttempts,
 				strings.Count(f.logs.String(), "automatic attachment maintenance complete"))
-			assert.Empty(events, "successful automatic maintenance writes no normal CLI output")
 		})
 	}
 }
@@ -2598,7 +2601,7 @@ func TestStoreAPIAdapterExplicitRepackCancellationFailsFast(t *testing.T) {
 	assert.True(has, "fail-fast cancellation leaves physical inventory untouched")
 }
 
-func TestStoreAPIAdapterMaintenanceWarningStreamsWithoutChangingSuccess(t *testing.T) {
+func TestStoreAPIAdapterRunCLISyncLeavesFailingMaintenanceToPendingPack(t *testing.T) {
 	require := require.New(t)
 	assert := assert.New(t)
 	maintenance, logs := newFailingAttachmentMaintenance(t)
@@ -2615,12 +2618,10 @@ func TestStoreAPIAdapterMaintenanceWarningStreamsWithoutChangingSuccess(t *testi
 		func(context.Context, []string, func(string, string) error) error { return nil },
 	)
 
-	require.NoError(err, "automatic maintenance failure must preserve sync success")
-	require.Len(events, 1, "one concise warning event")
-	assert.Equal("stderr", events[0].Type)
-	assert.Contains(events[0].Data, "pack-attachments")
-	assert.Contains(events[0].Data, "retry")
-	assert.Contains(logs.String(), "automatic attachment maintenance failed")
+	require.NoError(err)
+	assert.Empty(events, "sync output carries no maintenance warning")
+	assert.NotContains(logs.String(), "automatic attachment maintenance")
+	require.Error(maintenance.runPendingPack(context.Background()), "the pending pack reports the failure")
 }
 
 func TestStoreAPIAdapterMaintenanceWarningStreamFailurePreservesSuccess(t *testing.T) {
