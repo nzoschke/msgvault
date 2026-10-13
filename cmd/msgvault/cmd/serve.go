@@ -2208,15 +2208,9 @@ func (a *storeAPIAdapter) runCLISyncWithRunner(
 		}
 		return emit(api.CLISyncEvent{Type: stream, Data: data})
 	}
-	emitWarning := func(message string) error {
-		if emit == nil {
-			return nil
-		}
-		return emit(api.CLISyncEvent{Type: "stderr", Data: message})
-	}
-	return runAfterSuccessfulAttachmentIngest(ctx, a.attachmentMaintenance, func(ctx context.Context) error {
+	return runAndDeferAttachmentPack(ctx, a.attachmentMaintenance, func(ctx context.Context) error {
 		return run(ctx, cliSyncSubprocessArgs(req), emitSubprocess)
-	}, emitWarning)
+	})
 }
 
 // emitFolderArgs appends a --folder/--skip-folder flag for each

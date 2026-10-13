@@ -339,6 +339,20 @@ func runAfterSuccessfulAttachmentIngest(
 	return nil
 }
 
+// runAndDeferAttachmentPack leaves packing to the pending pack job so a sync's
+// result is not held behind a maintenance pass.
+func runAndDeferAttachmentPack(
+	ctx context.Context,
+	maintenance *attachmentMaintenance,
+	ingest func(context.Context) error,
+) error {
+	if err := runWithAttachmentMutation(ctx, maintenance, ingest); err != nil {
+		return err
+	}
+	maintenance.markPackPending()
+	return nil
+}
+
 // runAfterSuccessfulAttachmentRemoval runs bounded physical GC only after a
 // successful removal. Repack and warning-stream failures never replace the
 // already committed removal result.
