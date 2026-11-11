@@ -1,19 +1,14 @@
-Archive email, chats, and meetings offline. Use the daemon
-or config.toml's [remote].url; --local forces local.
+Archive email, chats, and meetings offline.
+Use config.toml's [remote].url; --local selects the local daemon.
 
 Start here:
   msgvault list-accounts --json
-  msgvault search 'from:alice@example.com newer_than:30d' --json
+  msgvault search 'from:alice@example.com' --json
   msgvault show-message <id> --json
-  msgvault export-eml <id> -o msg.eml
-  msgvault export-messages --start 2026-09-01T00:00:00Z --end 2026-10-01T00:00:00Z
-  msgvault person --help
-  msgvault daemon status
-  msgvault setup status --json
 
 Output:
-  --json: JSON stdout (export-messages: JSON Lines). Logs/progress: stderr.
-  --log-level=warn quiets logs. Exit: 0 success, 1 error, 130 interrupted.
+  --json: JSON stdout (export-messages: JSON Lines); logs: stderr.
+  Exit: 0 success, 1 error, 130 interrupted.
   More: msgvault quickstart.
 
 Usage:
@@ -55,7 +50,7 @@ People, organizations, and identity:
   relationship-type    Manage person relationship types
 
 Add and sync sources:
-  add-account            Add a Gmail account via OAuth
+  add-account            Add a Gmail account with configured credentials
   add-beeper             Add Beeper Desktop as an archive source
   add-calendar           Authorize Google Calendar and register its calendars
   add-carddav            Discover and configure a CardDAV account
@@ -118,8 +113,10 @@ Import local exports:
   import-gvoice       Import Google Voice history from Takeout export
   import-imazing-csv  Import Messages CSV exports created by iMazing
   import-imessage     Import iMessages from local database
+  import-job          Start or inspect a durable historical import job
   import-maildir      Import a Maildir or Maildir++ archive
   import-mbox         Import an MBOX export into msgvault
+  import-messages     Import prepared documents or email projections from JSON on stdin
   import-messenger    Import Facebook Messenger from a Meta data export
   import-pst          Import a PST (Outlook) archive into msgvault
   import-slackdump    Import a Slackdump export
@@ -164,6 +161,7 @@ Maintenance and repair:
   backup                  Back up the archive to a snapshot repository
   init-db                 Initialize the database schema
   migrate                 Apply this binary's archive schema migrations offline
+  migrate-outlook         Convert an Outlook EML import into a native Microsoft Graph mail source
   pack-attachments        Pack loose attachment files into sealed pack files
   policy                  Show room tiers and overrides
   purge-excluded-media    Reclaim locally stored media excluded by current policy
