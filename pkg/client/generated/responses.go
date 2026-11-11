@@ -1685,6 +1685,26 @@ type ImportMessageResponseJSON = MessageImportResponse
 
 type ImportMessageErrorResponse = ErrorResponse
 
+type ImportMessagesResponseJSON = ImportMessagesResponse
+
+type ImportMessagesErrorResponse = ErrorResponse
+
+type ImportMessagesErrorResponseJSON = ErrorResponse
+
+type ImportMessagesErrorResponseJSON409 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON413 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON415 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON422 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON500 = ErrorResponse
+
+type ImportMessagesErrorResponseJSON503 = ErrorResponse
+
+type ImportMessagesErrorResponseJSONDefault = ErrorResponse
+
 type ImportMuesliResponse = MuesliRemoteResult
 
 type ImportMuesliResponseJSON = MuesliRemoteResult
@@ -4083,6 +4103,8 @@ type GetSyncRunResultsErrorResponseJSON = ErrorResponse
 
 type GetSyncRunResultsErrorResponseJSON503 = ErrorResponse
 
+type GetSyncRunResultsErrorResponseJSONDefault = ErrorResponse
+
 type TriggerSyncResponseJSON = TriggerSyncResponse
 
 type TriggerSyncErrorResponse = ErrorResponse
@@ -5608,6 +5630,22 @@ type ImportMessageResp struct {
 	JSON200      *ImportMessageResponse
 	JSON201      *ImportMessageResponseJSON
 	JSONDefault  *ImportMessageErrorResponse
+}
+
+type ImportMessagesResp struct {
+	HTTPResponse *http.Response
+	Body         []byte
+	StatusCode   int
+	JSON200      *ImportMessagesResponseJSON
+	JSON400      *ImportMessagesErrorResponse
+	JSON401      *ImportMessagesErrorResponseJSON
+	JSON409      *ImportMessagesErrorResponseJSON409
+	JSON413      *ImportMessagesErrorResponseJSON413
+	JSON415      *ImportMessagesErrorResponseJSON415
+	JSON422      *ImportMessagesErrorResponseJSON422
+	JSON500      *ImportMessagesErrorResponseJSON500
+	JSON503      *ImportMessagesErrorResponseJSON503
+	JSONDefault  *ImportMessagesErrorResponseJSONDefault
 }
 
 type ImportMuesliResp struct {
@@ -7837,6 +7875,7 @@ type GetSyncRunResultsResp struct {
 	JSON400      *GetSyncRunResultsErrorResponse
 	JSON404      *GetSyncRunResultsErrorResponseJSON
 	JSON503      *GetSyncRunResultsErrorResponseJSON503
+	JSONDefault  *GetSyncRunResultsErrorResponseJSONDefault
 }
 
 type TriggerSyncResp struct {

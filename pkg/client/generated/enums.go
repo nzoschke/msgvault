@@ -1167,6 +1167,24 @@ func (i ImportJobResponseStatus) Validate() error {
 	}
 }
 
+type ImportMessageResultStatus string
+
+const (
+	Created   ImportMessageResultStatus = "created"
+	Unchanged ImportMessageResultStatus = "unchanged"
+	Updated   ImportMessageResultStatus = "updated"
+)
+
+// Validate checks if the ImportMessageResultStatus value is valid
+func (i ImportMessageResultStatus) Validate() error {
+	switch i {
+	case Created, Unchanged, Updated:
+		return nil
+	default:
+		return runtime.NewValidationErrorsFromString("Enum", fmt.Sprintf("must be a valid ImportMessageResultStatus value, got: %v", i))
+	}
+}
+
 type LocalEmbeddingsStatusPhase string
 
 const (
@@ -1459,17 +1477,17 @@ func (m MuesliRemoteRequestAction) Validate() error {
 type MuesliRemoteResultStatus string
 
 const (
-	Created    MuesliRemoteResultStatus = "created"
-	Refreshed  MuesliRemoteResultStatus = "refreshed"
-	Registered MuesliRemoteResultStatus = "registered"
-	Unchanged  MuesliRemoteResultStatus = "unchanged"
-	Updated    MuesliRemoteResultStatus = "updated"
+	MuesliRemoteResultStatusCreated   MuesliRemoteResultStatus = "created"
+	MuesliRemoteResultStatusUnchanged MuesliRemoteResultStatus = "unchanged"
+	MuesliRemoteResultStatusUpdated   MuesliRemoteResultStatus = "updated"
+	Refreshed                         MuesliRemoteResultStatus = "refreshed"
+	Registered                        MuesliRemoteResultStatus = "registered"
 )
 
 // Validate checks if the MuesliRemoteResultStatus value is valid
 func (m MuesliRemoteResultStatus) Validate() error {
 	switch m {
-	case Created, Refreshed, Registered, Unchanged, Updated:
+	case MuesliRemoteResultStatusCreated, MuesliRemoteResultStatusUnchanged, MuesliRemoteResultStatusUpdated, Refreshed, Registered:
 		return nil
 	default:
 		return runtime.NewValidationErrorsFromString("Enum", fmt.Sprintf("must be a valid MuesliRemoteResultStatus value, got: %v", m))

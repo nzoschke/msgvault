@@ -40,7 +40,7 @@ func TestFullSyncInterruptedFetchResume(t *testing.T) {
 			env.Syncer = New(&replayControlAPI{MockAPI: env.Mock, batchErrors: map[int]error{1: tt.interruption}}, env.Store, nil)
 			_, err := env.Syncer.Full(env.Context, testEmail)
 			r.ErrorIs(err, tt.interruption)
-			source, err := env.Store.GetSourceByIdentifier(testEmail)
+			source, err := env.Store.GetSourceByIdentifier(t.Context(), testEmail)
 			r.NoError(err)
 			run, err := env.Store.GetLatestSync(source.ID)
 			r.NoError(err)

@@ -70,7 +70,7 @@ func TestQueryBackfillPreservesAbsentMessages(t *testing.T) {
 	env := newTestEnv(t)
 	seedMessages(env, 2, 1000, "match", "outside-query")
 	runFullSync(t, env)
-	source, err := env.Store.GetSourceByIdentifier(testEmail)
+	source, err := env.Store.GetSourceByIdentifier(t.Context(), testEmail)
 	require.NoError(t, err)
 	env.Mock.MessagePages = [][]string{{"match"}}
 	delete(env.Mock.Messages, "outside-query")

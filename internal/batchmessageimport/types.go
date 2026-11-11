@@ -47,7 +47,7 @@ type ImportMessageResult struct {
 }
 
 type ImportMessagesResponse struct {
-	SourceID int64             `json:"source_id"`
+	SourceID int64                 `json:"source_id"`
 	Messages []ImportMessageResult `json:"messages"`
 }
 

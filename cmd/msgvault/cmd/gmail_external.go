@@ -100,7 +100,7 @@ func addExternalGmailAccount(cmd *cobra.Command, email string, state *invocation
 		return err
 	}
 	defer func() { _ = client.Close() }()
-	st, cleanup, err := openWritableStoreAndInitForIngestInvocation(state)
+	st, cleanup, err := openWritableStoreAndInitForIngestInvocation(cmd.Context(), state)
 	if err != nil {
 		return err
 	}
@@ -114,13 +114,13 @@ func addExternalGmailAccount(cmd *cobra.Command, email string, state *invocation
 			return err
 		}
 	}
-	if err := setDefaultIdentityOptOut(cmd, st, source, noDefaultIdentityAddAccount); err != nil {
+	if err := setDefaultIdentityOptOut(cmd.Context(), cmd, st, source, noDefaultIdentityAddAccount); err != nil {
 		return err
 	}
 	if !noDefaultIdentityAddAccount {
-		confirmDefaultIdentity(cmd.OutOrStdout(), st, source.ID, email, email, "account-identifier", state.logger)
+		confirmDefaultIdentity(cmd.Context(), cmd.OutOrStdout(), st, source.ID, email, email, "account-identifier", state.logger)
 	}
-	if err := runPostSourceCreateMigrationsForInvocation(st, state); err != nil {
+	if err := runPostSourceCreateMigrationsForInvocation(cmd.Context(), st, state); err != nil {
 		return err
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Account %s registered with external credentials. Run msgvault sync %s to back up mail.\n", email, email)

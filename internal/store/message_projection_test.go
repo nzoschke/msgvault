@@ -50,7 +50,7 @@ func TestImportMessagesEmailProjection(t *testing.T) {
 	assert.Equal(t, 1, count)
 	require.NoError(t, st.DB().QueryRow(`SELECT count(*) FROM attachments WHERE message_id=? AND storage_path='ab/hash' AND attachment_role='standalone'`, id).Scan(&count))
 	assert.Equal(t, 1, count)
-	body, err := st.GetMessageBodyText(id)
+	body, err := st.GetMessageBodyText(t.Context(), id)
 	require.NoError(t, err)
 	assert.Equal(t, "Cleaned body", body)
 	metadata, err := st.GetMessageMetadata(id)
@@ -75,7 +75,7 @@ func TestImportMessagesEmailProjection(t *testing.T) {
 	var label string
 	require.NoError(t, st.DB().QueryRow(`SELECT name FROM labels WHERE source_id=? AND source_label_id='SENT'`, first.SourceID).Scan(&label))
 	assert.Equal(t, "Renamed", label)
-	originalBody, err := st.GetMessageBodyText(101)
+	originalBody, err := st.GetMessageBodyText(t.Context(), 101)
 	require.NoError(t, err)
 	assert.Equal(t, "Original quoted body", originalBody)
 	originalRaw, err := st.GetMessageRaw(101)

@@ -202,7 +202,7 @@ func TestStandardExternalBackfill(t *testing.T) {
 				assert.Zero(t, historyCalls)
 				var id int64
 				require.NoError(t, st.DB().QueryRow("SELECT id FROM messages WHERE source_message_id = 'match'").Scan(&id))
-				body, err := st.GetMessageBodyText(id)
+				body, err := st.GetMessageBodyText(t.Context(), id)
 				require.NoError(t, err)
 				assert.Contains(t, body, "Archived body")
 				mime, err := st.GetMessageRaw(id)
@@ -261,6 +261,6 @@ func TestExternalSharedClientRejectsMismatchedAccount(t *testing.T) {
 	src := &store.Source{SourceType: "gmail", Identifier: "alice@example.com"}
 	_, err = buildAPIClient(ctx, src, nil, nil)
 	require.ErrorContains(t, err, "profile does not match")
-	_, _, err = newDaemonGmailClient(ctx, src.Identifier, src, nil, invocationFromContext(ctx))
+	_, _, err = newDaemonGmailClient(ctx, src.Identifier, src, nil, invocationFromContext(ctx), nil)
 	require.ErrorContains(t, err, "profile does not match")
 }

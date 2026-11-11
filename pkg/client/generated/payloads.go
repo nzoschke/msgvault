@@ -128,6 +128,8 @@ type ImportMeetingBody = MeetingImportRequest
 
 type ImportMessageBody = MessageImportRequest
 
+type ImportMessagesBody = ImportMessagesRequest
+
 type ImportMuesliBody = MuesliRemoteRequest
 
 type ImportMuesliRecordingBody = runtime.File
