@@ -3,7 +3,7 @@ package store
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -25,6 +25,7 @@ type messageProjection struct {
 
 type projectionQuerier struct {
 	boundQuerier
+
 	tx *loggedTx
 }
 
@@ -37,7 +38,7 @@ func projectionRows(q projectionQuerier, query string, id int64) ([]map[string]a
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err
@@ -66,7 +67,7 @@ func projectionRows(q projectionQuerier, query string, id int64) ([]map[string]a
 
 func loadMessageProjection(q projectionQuerier, in batchmessageimport.ImportMessage, destination int64) (*messageProjection, error) {
 	if in.OriginalMessageID == 0 {
-		return nil, nil
+		return nil, nil //nolint:nilnil // A document without an original email has no projection.
 	}
 	var originalID, threadID string
 	var sourceID int64
@@ -102,7 +103,7 @@ func loadMessageProjection(q projectionQuerier, in batchmessageimport.ImportMess
 		return nil, err
 	}
 	switch format {
-	case "mime":
+	case emailLinkageRawFormat:
 		email, err := mail.ReadMessage(bytes.NewReader(decoded))
 		if err != nil {
 			return nil, fmt.Errorf("read original headers: %w", err)

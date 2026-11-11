@@ -3,8 +3,6 @@ package cmd
 import (
 	"encoding/base64"
 	"encoding/json"
-	"github.com/spf13/cobra"
-	"go.kenn.io/msgvault/internal/api"
 	"io"
 	"net"
 	"net/http"
@@ -15,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.kenn.io/msgvault/internal/api"
 	"go.kenn.io/msgvault/internal/config"
 	"go.kenn.io/msgvault/internal/store"
 )
@@ -37,20 +37,23 @@ func TestStandardExternalFlagValidation(t *testing.T) {
 }
 
 func TestStandardExternalDaemonForwarding(t *testing.T) {
+	assertions := assert.New(t)
+
 	for _, query := range []string{"from:a@example.com OR from:b@example.com", "in:anywhere rfc822msgid:fixture+abc@example.com"} {
 		args := cliSyncSubprocessArgs(api.CLISyncRequest{Full: true, JSON: true, Email: "alice@example.com", Query: query, After: "2025-09-23", Before: "2025-09-25", Limit: 3, NoResume: true})
 		cmd := newStandardExternalTestCmd(t, false)
 		require.NoError(t, cmd.ParseFlags(args[1:]))
-		assert.Equal(t, query, syncQuery)
-		assert.Equal(t, "2025-09-23", syncAfter)
-		assert.Equal(t, "2025-09-25", syncBefore)
-		assert.Equal(t, 3, syncLimit)
-		assert.True(t, syncNoResume)
-		assert.True(t, syncJSON)
+		assertions.Equal(query, syncQuery)
+		assertions.Equal("2025-09-23", syncAfter)
+		assertions.Equal("2025-09-25", syncBefore)
+		assertions.Equal(3, syncLimit)
+		assertions.True(syncNoResume)
+		assertions.True(syncJSON)
 	}
 }
 
 func newStandardExternalTestCmd(t *testing.T, incremental bool) *cobra.Command {
+	t.Helper()
 	oldQuery, oldAfter, oldBefore, oldNoResume, oldJSON, oldLimit := syncQuery, syncAfter, syncBefore, syncNoResume, syncJSON, syncLimit
 	t.Cleanup(func() {
 		syncQuery, syncAfter, syncBefore, syncNoResume, syncJSON, syncLimit = oldQuery, oldAfter, oldBefore, oldNoResume, oldJSON, oldLimit
@@ -91,26 +94,29 @@ func TestStandardExternalBackfill(t *testing.T) {
 		{name: "incremental", cursor: "123", incremental: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			markDaemonCLISubprocessForTest(t)
 			t.Chdir(t.TempDir())
 			cfg := config.NewDefaultConfig()
 			cfg.HomeDir = t.TempDir()
 			cfg.Data.DataDir = cfg.HomeDir
 			st, err := store.Open(cfg.DatabaseDSN())
-			require.NoError(t, err)
+			requirements.NoError(err)
 			t.Cleanup(func() { _ = st.Close() })
-			require.NoError(t, st.InitSchema())
+			requirements.NoError(st.InitSchema())
 			source, err := st.GetOrCreateSource("gmail", "alice@example.com")
-			require.NoError(t, err)
+			requirements.NoError(err)
 			if tt.cursor != "" {
-				require.NoError(t, st.UpdateSourceSyncCursor(source.ID, tt.cursor))
+				requirements.NoError(st.UpdateSourceSyncCursor(source.ID, tt.cursor))
 			}
 			source, err = st.GetSourceByID(source.ID)
-			require.NoError(t, err)
+			requirements.NoError(err)
 			originalCursor := source.SyncCursor
 
-			listener, err := net.Listen("unix", "token.sock")
-			require.NoError(t, err)
+			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
+			requirements.NoError(err)
 			credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "alice@example.com", r.URL.Query().Get("account"))
 				_, _ = io.WriteString(w, `{"access_token":"fixture-token"}`)
@@ -174,48 +180,48 @@ func TestStandardExternalBackfill(t *testing.T) {
 				return cmd.Execute()
 			}
 			if tt.failure {
-				require.ErrorContains(t, run(), "unresolved message errors")
+				requirements.ErrorContains(run(), "unresolved message errors")
 				got, err := st.GetSourceByID(source.ID)
-				require.NoError(t, err)
-				assert.Equal(t, originalCursor, got.SyncCursor)
+				requirements.NoError(err)
+				assertions.Equal(originalCursor, got.SyncCursor)
 				fail = false
 			}
-			require.NoError(t, run())
+			requirements.NoError(run())
 			if tt.query != "" {
-				require.NoError(t, run(), "repeat is idempotent")
+				requirements.NoError(run(), "repeat is idempotent")
 			}
 			got, err := st.GetSourceByID(source.ID)
-			require.NoError(t, err)
+			requirements.NoError(err)
 			if tt.query != "" || tt.after != "" {
-				assert.Equal(t, originalCursor, got.SyncCursor)
+				assertions.Equal(originalCursor, got.SyncCursor)
 			} else {
-				assert.Equal(t, "999", got.SyncCursor.String)
+				assertions.Equal("999", got.SyncCursor.String)
 			}
 			var count int
-			require.NoError(t, st.DB().QueryRow("SELECT count(*) FROM messages").Scan(&count))
+			requirements.NoError(st.DB().QueryRowContext(t.Context(), "SELECT count(*) FROM messages").Scan(&count))
 			if tt.incremental {
-				assert.Zero(t, count)
-				assert.Empty(t, queries)
-				assert.Equal(t, 1, historyCalls)
+				assertions.Zero(count)
+				assertions.Empty(queries)
+				assertions.Equal(1, historyCalls)
 			} else {
-				assert.Equal(t, 2, count)
-				assert.Zero(t, historyCalls)
+				assertions.Equal(2, count)
+				assertions.Zero(historyCalls)
 				var id int64
-				require.NoError(t, st.DB().QueryRow("SELECT id FROM messages WHERE source_message_id = 'match'").Scan(&id))
+				requirements.NoError(st.DB().QueryRowContext(t.Context(), "SELECT id FROM messages WHERE source_message_id = 'match'").Scan(&id))
 				body, err := st.GetMessageBodyText(t.Context(), id)
-				require.NoError(t, err)
-				assert.Contains(t, body, "Archived body")
+				requirements.NoError(err)
+				assertions.Contains(body, "Archived body")
 				mime, err := st.GetMessageRaw(id)
-				require.NoError(t, err)
-				assert.Equal(t, raw, string(mime))
-				require.NoError(t, st.DB().QueryRow("SELECT count(*) FROM attachments").Scan(&count))
-				assert.Equal(t, 2, count)
+				requirements.NoError(err)
+				assertions.Equal(raw, string(mime))
+				requirements.NoError(st.DB().QueryRowContext(t.Context(), "SELECT count(*) FROM attachments").Scan(&count))
+				assertions.Equal(2, count)
 				attachments, err := st.MessageMIMEAttachmentsContext(t.Context(), id)
-				require.NoError(t, err)
-				require.Len(t, attachments, 1)
+				requirements.NoError(err)
+				requirements.Len(attachments, 1)
 				content, err := os.ReadFile(filepath.Join(cfg.AttachmentsDir(), attachments[0].StoragePath))
-				require.NoError(t, err)
-				assert.Contains(t, string(content), "Attachment content")
+				requirements.NoError(err)
+				assertions.Contains(string(content), "Attachment content")
 				// Cache refresh is queued by the parent daemon; checked in integration.
 			}
 		})
@@ -223,28 +229,31 @@ func TestStandardExternalBackfill(t *testing.T) {
 }
 
 func TestSetupExternalGmail(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	cfg := config.NewDefaultConfig()
 	cfg.HomeDir = t.TempDir()
-	require.NoError(t, os.WriteFile(cfg.ConfigFilePath(), []byte("# keep operator settings\n[vector]\nenabled = false\n"), 0600))
+	requirements.NoError(os.WriteFile(cfg.ConfigFilePath(), []byte("# keep operator settings\n[vector]\nenabled = false\n"), 0600))
 	cmd := newSetupExternalGmailCmd()
 	cmd.SetContext(withStoreResolverConfig(t, cfg))
 	cmd.SetArgs([]string{"--endpoint", "https://proxy.example.test/v1", "--credential-socket", filepath.Join(cfg.HomeDir, "token.sock"), "--include-spam-trash"})
-	require.NoError(t, cmd.Execute())
+	requirements.NoError(cmd.Execute())
 	loaded, err := config.Load(cfg.ConfigFilePath(), cfg.HomeDir)
-	require.NoError(t, err)
-	require.NotNil(t, loaded.Gmail.External)
-	assert.Equal(t, "https://proxy.example.test/v1", loaded.Gmail.External.Endpoint)
-	assert.True(t, loaded.Gmail.External.IncludeSpamTrash)
-	assert.False(t, loaded.Vector.Enabled)
+	requirements.NoError(err)
+	requirements.NotNil(loaded.Gmail.External)
+	assertions.Equal("https://proxy.example.test/v1", loaded.Gmail.External.Endpoint)
+	assertions.True(loaded.Gmail.External.IncludeSpamTrash)
+	assertions.False(loaded.Vector.Enabled)
 	data, err := os.ReadFile(cfg.ConfigFilePath())
-	require.NoError(t, err)
-	assert.Contains(t, string(data), "# keep operator settings")
-	assert.NotContains(t, string(data), "access_token")
+	requirements.NoError(err)
+	assertions.Contains(string(data), "# keep operator settings")
+	assertions.NotContains(string(data), "access_token")
 }
 
 func TestExternalSharedClientRejectsMismatchedAccount(t *testing.T) {
 	t.Chdir(t.TempDir())
-	listener, err := net.Listen("unix", "token.sock")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
 	require.NoError(t, err)
 	credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"access_token":"fixture-token"}`)

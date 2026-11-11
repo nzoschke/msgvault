@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 
@@ -23,13 +23,8 @@ func newImportMessagesCommand() *cobra.Command {
 				return errors.New("message import exceeds 16 MiB")
 			}
 			var validated batchmessageimport.ImportMessagesRequest
-			decoder := json.NewDecoder(bytes.NewReader(data))
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&validated); err != nil {
+			if err := json.Unmarshal(data, &validated, json.RejectUnknownMembers(true)); err != nil {
 				return errors.New("invalid message import JSON")
-			}
-			if err := decoder.Decode(new(any)); err != io.EOF {
-				return errors.New("unexpected trailing JSON")
 			}
 			if err := validated.Validate(); err != nil {
 				return err
@@ -42,12 +37,12 @@ func newImportMessagesCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 			out, err := client.ImportMessages(cmd.Context(), in)
 			if err != nil {
 				return err
 			}
-			return json.NewEncoder(cmd.OutOrStdout()).Encode(out)
+			return json.MarshalEncode(jsontext.NewEncoder(cmd.OutOrStdout()), out)
 		},
 	}
 }

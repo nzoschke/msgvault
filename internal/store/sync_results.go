@@ -62,7 +62,7 @@ type SyncRunResults struct {
 // active. MessageID resolves the current archive row and is nil after removal.
 func (s *Store) ListSyncRunResults(ctx context.Context, syncID, afterID int64, limit int) (*SyncRunResults, error) {
 	if syncID <= 0 || afterID < 0 || limit < 1 || limit > 1000 {
-		return nil, fmt.Errorf("invalid sync result pagination")
+		return nil, errors.New("invalid sync result pagination")
 	}
 	page := &SyncRunResults{SyncRunID: syncID, NextAfterID: afterID, Items: []SyncRunResult{}}
 	err := s.db.QueryRowContext(ctx, `SELECT source_id, status FROM sync_runs WHERE id = ?`, syncID).Scan(&page.SourceID, &page.RunStatus)
@@ -80,7 +80,7 @@ func (s *Store) ListSyncRunResults(ctx context.Context, syncID, afterID int64, l
 	if err != nil {
 		return nil, fmt.Errorf("list sync results: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var item SyncRunResult
 		if err := rows.Scan(&item.ID, &item.SourceMessageID, &item.MessageID, &item.Phase, &item.Status, &item.ErrorKind, &item.ErrorMessage); err != nil {

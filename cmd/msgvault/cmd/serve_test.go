@@ -2033,7 +2033,7 @@ func TestStoreAPIAdapterRunCLISyncDefersPackAfterSubprocessSuccess(t *testing.T)
 			assert.Nil(f.packedEntry(hash), "sync must not pack inline")
 			assert.NotContains(f.logs.String(), "automatic attachment maintenance")
 			assert.Empty(events, "deferred maintenance writes no CLI output")
-			require.NoError(f.maintenance.runPendingPack(context.Background()))
+			require.NoError(f.maintenance.runPendingPack(t.Context()))
 			assert.Equal(tt.wantPacked, f.packedEntry(hash) != nil)
 			assert.Equal(tt.wantAttempts,
 				strings.Count(f.logs.String(), "automatic attachment maintenance complete"))
@@ -2621,7 +2621,7 @@ func TestStoreAPIAdapterRunCLISyncLeavesFailingMaintenanceToPendingPack(t *testi
 	require.NoError(err)
 	assert.Empty(events, "sync output carries no maintenance warning")
 	assert.NotContains(logs.String(), "automatic attachment maintenance")
-	require.Error(maintenance.runPendingPack(context.Background()), "the pending pack reports the failure")
+	require.Error(maintenance.runPendingPack(t.Context()), "the pending pack reports the failure")
 }
 
 func TestStoreAPIAdapterMaintenanceWarningStreamFailurePreservesSuccess(t *testing.T) {

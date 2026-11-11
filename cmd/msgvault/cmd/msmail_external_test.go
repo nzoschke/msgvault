@@ -55,7 +55,7 @@ func TestAddO365GraphExternal(t *testing.T) {
 	cfg := config.NewDefaultConfig()
 	cfg.HomeDir = t.TempDir()
 	t.Chdir(cfg.HomeDir)
-	listener, err := net.Listen("unix", "credentials.sock")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "credentials.sock")
 	require.NoError(err)
 	credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal("outlook", r.URL.Query().Get("provider"))

@@ -19,7 +19,6 @@ import (
 	"github.com/doordash-oss/oapi-codegen-dd/v3/pkg/runtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"go.kenn.io/msgvault/internal/apiprotocol"
 	"go.kenn.io/msgvault/internal/contentverify"
 	"go.kenn.io/msgvault/internal/deletion"
@@ -2505,6 +2504,9 @@ func TestGetCLIHybridSearchAttachmentMetadataAvailability(t *testing.T) {
 func TestRunCLISyncOperationCapability(t *testing.T) {
 	for _, version := range []string{"3.6.0", "3.7.0"} {
 		t.Run(version, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			calls := 0
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/api/v1/health" {
@@ -2519,14 +2521,14 @@ func TestRunCLISyncOperationCapability(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 			client, err := New(Config{URL: srv.URL, AllowInsecure: true, HTTPClient: srv.Client()})
-			require.NoError(t, err)
+			requirements.NoError(err)
 			err = client.RunCLISync(t.Context(), CLISyncRequest{Full: true, Email: "archive@example.com", OperationID: "attempt-1"}, nil)
 			if version == "3.6.0" {
-				require.ErrorContains(t, err, "3.7.0")
-				assert.Zero(t, calls)
+				requirements.ErrorContains(err, "3.7.0")
+				assertions.Zero(calls)
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, 1, calls)
+				requirements.NoError(err)
+				assertions.Equal(1, calls)
 			}
 		})
 	}
