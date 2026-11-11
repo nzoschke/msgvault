@@ -2,7 +2,7 @@ package gmail
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -73,7 +73,7 @@ func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			AccessToken string `json:"access_token"`
 		}
 		if response.StatusCode == http.StatusOK {
-			err = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&credential)
+			err = json.UnmarshalRead(io.LimitReader(response.Body, 1<<20), &credential)
 		}
 		_ = response.Body.Close()
 		if err != nil || response.StatusCode != http.StatusOK || credential.AccessToken == "" {

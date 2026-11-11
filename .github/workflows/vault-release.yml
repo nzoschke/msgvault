@@ -34,11 +34,13 @@ jobs:
       run:
         shell: bash
     steps:
+      - uses: kenn-io/kit/.github/actions/kit-retry@v0.48.4
+
       - name: Install build tools
         if: matrix.arch == 'arm64'
         run: |
-          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
-          apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y gcc g++ git curl tar gzip make unzip libsqlite3-dev ca-certificates
+          kit-retry 3 5 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update
+          kit-retry 3 5 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y gcc g++ git curl tar gzip make unzip libsqlite3-dev ca-certificates
       - name: Verify build environment
         run: |
           . /etc/os-release
@@ -59,7 +61,7 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: |
           version=$(awk '/^go / {print $2}' go.mod)
-          curl -fsSL --retry 5 "https://go.dev/dl/go${version}.linux-${ARCH}.tar.gz" -o /tmp/go.tar.gz
+          kit-download "https://go.dev/dl/go${version}.linux-${ARCH}.tar.gz" /tmp/go.tar.gz
           mkdir -p "$RUNNER_TEMP/msgvault-go"
           tar -C "$RUNNER_TEMP/msgvault-go" -xzf /tmp/go.tar.gz
           echo "$RUNNER_TEMP/msgvault-go/go/bin" >> "$GITHUB_PATH"

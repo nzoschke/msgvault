@@ -48,7 +48,7 @@ func TestFullSyncInterruptedFetchResume(t *testing.T) {
 			a.Equal(int64(2), run.MessagesProcessed)
 			a.Equal(tt.savedErrors, run.ErrorsCount)
 			if tt.legacyErrors > 0 {
-				_, err = env.Store.DB().Exec("UPDATE sync_runs SET errors_count = ? WHERE id = ?", tt.legacyErrors, run.ID)
+				_, err = env.Store.DB().ExecContext(t.Context(), "UPDATE sync_runs SET errors_count = ? WHERE id = ?", tt.legacyErrors, run.ID)
 				r.NoError(err)
 			}
 			delete(env.Mock.GetMessageError, "msg1")

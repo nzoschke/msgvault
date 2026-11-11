@@ -10,6 +10,9 @@ import (
 )
 
 func TestSyncRunResultsFullAndRepeated(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	t.Parallel()
 	env := newTestEnv(t)
 	seedMessages(env, 3, 12345, "one", "two", "three")
@@ -17,16 +20,16 @@ func TestSyncRunResultsFullAndRepeated(t *testing.T) {
 	for range 2 {
 		summary := runFullSync(t, env)
 		page, err := env.Store.ListSyncRunResults(t.Context(), summary.SyncRunID, 0, 100)
-		require.NoError(t, err)
-		require.Len(t, page.Items, 3)
+		requirements.NoError(err)
+		requirements.Len(page.Items, 3)
 		ids := make([]string, 0, 3)
 		for _, item := range page.Items {
-			assert.Equal(t, store.SyncRunItemStatusSuccess, item.Status)
-			require.NotNil(t, item.MessageID)
+			assertions.Equal(store.SyncRunItemStatusSuccess, item.Status)
+			requirements.NotNil(item.MessageID)
 			ids = append(ids, item.SourceMessageID)
 		}
-		assert.ElementsMatch(t, []string{"one", "two", "three"}, ids)
-		assert.Equal(t, store.SyncStatusCompleted, page.RunStatus)
+		assertions.ElementsMatch([]string{"one", "two", "three"}, ids)
+		assertions.Equal(store.SyncStatusCompleted, page.RunStatus)
 	}
 }
 
@@ -53,18 +56,21 @@ func TestSyncRunResultsIncremental(t *testing.T) {
 }
 
 func TestSyncRunResultsFailureStopsCompletion(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	t.Parallel()
 	env := newTestEnv(t)
 	seedMessages(env, 1, 1000, "one")
-	_, err := env.Store.DB().Exec(`CREATE TRIGGER reject_success BEFORE INSERT ON sync_run_items
+	_, err := env.Store.DB().ExecContext(t.Context(), `CREATE TRIGGER reject_success BEFORE INSERT ON sync_run_items
 		WHEN NEW.status = 'success' BEGIN SELECT RAISE(ABORT, 'results unavailable'); END`)
-	require.NoError(t, err)
+	requirements.NoError(err)
 	_, err = env.Syncer.Full(t.Context(), testEmail)
-	require.ErrorContains(t, err, "record sync messages")
+	requirements.ErrorContains(err, "record sync messages")
 	source, err := env.Store.GetOrCreateSource("gmail", testEmail)
-	require.NoError(t, err)
-	assert.False(t, source.SyncCursor.Valid)
+	requirements.NoError(err)
+	assertions.False(source.SyncCursor.Valid)
 	run, err := env.Store.GetLatestSync(source.ID)
-	require.NoError(t, err)
-	assert.Equal(t, store.SyncStatusFailed, run.Status)
+	requirements.NoError(err)
+	assertions.Equal(store.SyncStatusFailed, run.Status)
 }

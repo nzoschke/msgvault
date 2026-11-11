@@ -20,7 +20,7 @@ import (
 func credentialSocket(t *testing.T, refreshes *atomic.Int32) string {
 	t.Helper()
 	t.Chdir(t.TempDir())
-	listener, err := net.Listen("unix", "token.sock")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
 	require.NoError(t, err)
 	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/token", r.URL.Path)
@@ -160,7 +160,7 @@ func TestExternalClientCredentialFailure(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
 	t.Chdir(t.TempDir())
-	listener, err := net.Listen("unix", "token.sock")
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
 	require.NoError(err)
 	srv := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

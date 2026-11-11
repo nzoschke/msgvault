@@ -20,22 +20,25 @@ func TestConfigureEmbeddingProxy(t *testing.T) {
 		{name: "preserve toggle and schedule", content: "[vector]\nenabled = true\n[vector.embed.schedule]\ncron = \"\"\n", enabled: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			path := filepath.Join(t.TempDir(), "config.toml")
-			require.NoError(t, os.WriteFile(path, []byte(tt.content), 0600))
-			require.NoError(t, configureEmbeddingProxy(path, "https://proxy.example.test/llm/v1", "TEST_AUTH", "TEST_ENDPOINT"))
+			requirements.NoError(os.WriteFile(path, []byte(tt.content), 0600))
+			requirements.NoError(configureEmbeddingProxy(path, "https://proxy.example.test/llm/v1", "TEST_AUTH", "TEST_ENDPOINT"))
 			loaded, err := config.Load(path, filepath.Dir(path))
-			require.NoError(t, err)
-			assert.Equal(t, tt.enabled, loaded.Vector.Enabled)
-			assert.Equal(t, tt.cron, loaded.Vector.Embed.Schedule.Cron)
-			assert.Equal(t, "text-embedding-3-small", loaded.Vector.Embeddings.Model)
-			assert.Equal(t, 1536, loaded.Vector.Embeddings.Dimension)
-			assert.Equal(t, "TEST_AUTH", loaded.Vector.Embeddings.AuthorizationEnv)
+			requirements.NoError(err)
+			assertions.Equal(tt.enabled, loaded.Vector.Enabled)
+			assertions.Equal(tt.cron, loaded.Vector.Embed.Schedule.Cron)
+			assertions.Equal("text-embedding-3-small", loaded.Vector.Embeddings.Model)
+			assertions.Equal(1536, loaded.Vector.Embeddings.Dimension)
+			assertions.Equal("TEST_AUTH", loaded.Vector.Embeddings.AuthorizationEnv)
 			before, err := os.ReadFile(path)
-			require.NoError(t, err)
-			require.NoError(t, configureEmbeddingProxy(path, "https://proxy.example.test/llm/v1", "TEST_AUTH", "TEST_ENDPOINT"))
+			requirements.NoError(err)
+			requirements.NoError(configureEmbeddingProxy(path, "https://proxy.example.test/llm/v1", "TEST_AUTH", "TEST_ENDPOINT"))
 			after, err := os.ReadFile(path)
-			require.NoError(t, err)
-			assert.Equal(t, string(before), string(after))
+			requirements.NoError(err)
+			assertions.Equal(string(before), string(after))
 		})
 	}
 }

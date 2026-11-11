@@ -124,5 +124,8 @@ func addExternalGmailAccount(cmd *cobra.Command, email string, state *invocation
 		return err
 	}
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Account %s registered with external credentials. Run msgvault sync %s to back up mail.\n", email, email)
-	return err
+	if err != nil {
+		return fmt.Errorf("write external account registration: %w", err)
+	}
+	return nil
 }

@@ -10,7 +10,7 @@ import (
 )
 
 type SyncRunResultsStore interface {
-	ListSyncRunResults(context.Context, int64, int64, int) (*store.SyncRunResults, error)
+	ListSyncRunResults(ctx context.Context, runID int64, afterID int64, limit int) (*store.SyncRunResults, error)
 }
 
 func (s *Server) handleSyncRunResults(w http.ResponseWriter, r *http.Request) {

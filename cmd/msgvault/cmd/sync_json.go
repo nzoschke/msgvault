@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"log/slog"
@@ -35,23 +36,23 @@ type syncJSONResult struct {
 	SyncRunID       int64  `json:"sync_run_id"`
 
 	// Microsoft Graph mail only.
-	Folders         *int64 `json:"folders,omitempty"`
-	MessagesMoved   *int64 `json:"messages_moved,omitempty"`
-	MessagesDeleted *int64 `json:"messages_deleted,omitempty"`
+	Folders         *int64 `json:"folders,omitzero"`
+	MessagesMoved   *int64 `json:"messages_moved,omitzero"`
+	MessagesDeleted *int64 `json:"messages_deleted,omitzero"`
 }
 
 type syncJSONProgressEvent struct {
-	Added     int64  `json:"added,omitempty"`
+	Added     int64  `json:"added,omitzero"`
 	Event     string `json:"event"`
-	Processed int64  `json:"processed,omitempty"`
-	Skipped   int64  `json:"skipped,omitempty"`
-	Total     int64  `json:"total,omitempty"`
+	Processed int64  `json:"processed,omitzero"`
+	Skipped   int64  `json:"skipped,omitzero"`
+	Total     int64  `json:"total,omitzero"`
 }
 
 func (p *syncJSONProgress) emit(value syncJSONProgressEvent) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if err := json.NewEncoder(p.output).Encode(value); err != nil {
+	if err := json.MarshalEncode(jsontext.NewEncoder(p.output), value); err != nil {
 		p.logger.Warn("write sync progress", "error", err)
 	}
 }
@@ -94,7 +95,7 @@ func recordMSMailSyncJSON(s *msmail.Summary, source *store.Source) {
 
 func finishSyncJSON(err error) error {
 	for _, result := range syncResults {
-		err = errors.Join(err, json.NewEncoder(os.Stdout).Encode(result))
+		err = errors.Join(err, json.MarshalEncode(jsontext.NewEncoder(os.Stdout), result))
 	}
 	syncResults = nil
 	return err

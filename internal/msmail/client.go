@@ -19,6 +19,7 @@ const GraphBaseURL = msgraph.GraphBaseURL
 // Client adds the mail endpoints to the shared Graph transport.
 type Client struct {
 	*msgraph.Client
+
 	external bool
 }
 

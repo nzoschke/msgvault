@@ -2,7 +2,7 @@ package msmail
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -98,7 +98,7 @@ func (t *externalTransport) token(ctx context.Context, refresh bool) (string, er
 		AccessToken string `json:"access_token"`
 	}
 	if resp.StatusCode == http.StatusOK {
-		err = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&credential)
+		err = json.UnmarshalRead(io.LimitReader(resp.Body, 1<<20), &credential)
 	}
 	if err != nil || resp.StatusCode != http.StatusOK || credential.AccessToken == "" {
 		return "", fmt.Errorf("external credentials unavailable (status %d): %w", resp.StatusCode, msgraph.ErrNotRetryable)
@@ -114,7 +114,7 @@ func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	if req.Method != http.MethodGet || u.Scheme != "https" || !strings.EqualFold(u.Host, "graph.microsoft.com") || u.User != nil || u.Opaque != "" || u.Fragment != "" || !strings.HasPrefix(u.EscapedPath(), graphMailPrefix) {
 		return nil, fmt.Errorf("external Microsoft mail client only permits mailbox reads: %w", msgraph.ErrNotRetryable)
 	}
-	for _, segment := range strings.Split(u.Path, "/") {
+	for segment := range strings.SplitSeq(u.Path, "/") {
 		if segment == "." || segment == ".." || strings.ContainsRune(segment, '\\') {
 			return nil, fmt.Errorf("external Microsoft request path is not a mailbox read: %w", msgraph.ErrNotRetryable)
 		}

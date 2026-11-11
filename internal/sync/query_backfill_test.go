@@ -22,13 +22,16 @@ func TestQueryBackfillCheckpointIsolation(t *testing.T) {
 			{name: "different spam scope", nextQuery: "from:a@example.com", scope: "external:include-spam-trash"},
 		} {
 			t.Run(cursor+"/"+tt.name, func(t *testing.T) {
+				assertions := assert.New(t)
+				requirements := require.New(t)
+
 				env := newTestEnv(t)
 				source := env.CreateSource(t)
 				if cursor != "" {
-					require.NoError(t, env.Store.UpdateSourceSyncCursor(source.ID, cursor))
+					requirements.NoError(env.Store.UpdateSourceSyncCursor(source.ID, cursor))
 				}
 				before, err := env.Store.GetSourceByID(source.ID)
-				require.NoError(t, err)
+				requirements.NoError(err)
 				seedPagedMessages(env, 8)
 				opts := DefaultOptions()
 				opts.Query = "from:a@example.com"
@@ -36,42 +39,45 @@ func TestQueryBackfillCheckpointIsolation(t *testing.T) {
 					env.Mock.GetMessageError["msg1"] = errors.New("fetch unavailable")
 				}
 				_, err = New(&cancelOnSecondListAPI{MockAPI: env.Mock}, env.Store, opts).Full(env.Context, testEmail)
-				require.ErrorIs(t, err, context.Canceled)
+				requirements.ErrorIs(err, context.Canceled)
 				checkpoint, err := env.Store.GetLatestCheckpointedSync(source.ID)
-				require.NoError(t, err)
-				require.NotEmpty(t, checkpoint.CursorBefore.String)
+				requirements.NoError(err)
+				requirements.NotEmpty(checkpoint.CursorBefore.String)
 				after, err := env.Store.GetSourceByID(source.ID)
-				require.NoError(t, err)
-				assert.Equal(t, before.SyncCursor, after.SyncCursor)
+				requirements.NoError(err)
+				assertions.Equal(before.SyncCursor, after.SyncCursor)
 
 				delete(env.Mock.GetMessageError, "msg1")
 				env.Mock.Profile.HistoryID = 2000
 				opts.Query = tt.nextQuery
 				opts.CheckpointScope = tt.scope
 				summary, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-				require.NoError(t, err)
-				assert.Equal(t, tt.resume, summary.WasResumed)
+				requirements.NoError(err)
+				assertions.Equal(tt.resume, summary.WasResumed)
 				if tt.resume {
-					assert.Equal(t, checkpoint.CursorBefore.String, summary.ResumedFromToken)
+					assertions.Equal(checkpoint.CursorBefore.String, summary.ResumedFromToken)
 				} else {
-					assert.Empty(t, summary.ResumedFromToken)
+					assertions.Empty(summary.ResumedFromToken)
 				}
-				assert.Zero(t, summary.Errors)
+				assertions.Zero(summary.Errors)
 				assertMessageCount(t, env.Store, 8)
 				after, err = env.Store.GetSourceByID(source.ID)
-				require.NoError(t, err)
-				assert.Equal(t, before.SyncCursor, after.SyncCursor)
+				requirements.NoError(err)
+				assertions.Equal(before.SyncCursor, after.SyncCursor)
 			})
 		}
 	}
 }
 
 func TestQueryBackfillPreservesAbsentMessages(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	env := newTestEnv(t)
 	seedMessages(env, 2, 1000, "match", "outside-query")
 	runFullSync(t, env)
 	source, err := env.Store.GetSourceByIdentifier(t.Context(), testEmail)
-	require.NoError(t, err)
+	requirements.NoError(err)
 	env.Mock.MessagePages = [][]string{{"match"}}
 	delete(env.Mock.Messages, "outside-query")
 	env.Mock.Profile.HistoryID = 2000
@@ -79,18 +85,21 @@ func TestQueryBackfillPreservesAbsentMessages(t *testing.T) {
 	opts.Query = "from:sender@example.com"
 	for range 2 {
 		summary, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-		require.NoError(t, err)
-		assert.Zero(t, summary.MessagesAdded)
-		assert.Zero(t, summary.Errors)
+		requirements.NoError(err)
+		assertions.Zero(summary.MessagesAdded)
+		assertions.Zero(summary.Errors)
 		assertMessageCount(t, env.Store, 2)
 		assertDeletedFromSource(t, env.Store, "outside-query", false)
 		current, err := env.Store.GetSourceByID(source.ID)
-		require.NoError(t, err)
-		assert.Equal(t, source.SyncCursor, current.SyncCursor)
+		requirements.NoError(err)
+		assertions.Equal(source.SyncCursor, current.SyncCursor)
 	}
 }
 
 func TestQueryBackfillDoesNotResumeInitialBackfill(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	env := newTestEnv(t)
 	source := env.CreateSource(t)
 	seedPagedMessages(env, 4)
@@ -98,13 +107,13 @@ func TestQueryBackfillDoesNotResumeInitialBackfill(t *testing.T) {
 	opts.Query = "after:2025-09-23"
 	opts.InitialBackfill = true
 	_, err := New(&cancelOnSecondListAPI{MockAPI: env.Mock}, env.Store, opts).Full(env.Context, testEmail)
-	require.ErrorIs(t, err, context.Canceled)
+	requirements.ErrorIs(err, context.Canceled)
 	opts.InitialBackfill = false
 	summary, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-	require.NoError(t, err)
-	assert.False(t, summary.WasResumed)
+	requirements.NoError(err)
+	assertions.False(summary.WasResumed)
 	after, err := env.Store.GetSourceByID(source.ID)
-	require.NoError(t, err)
-	assert.Equal(t, source.SyncCursor, after.SyncCursor)
+	requirements.NoError(err)
+	assertions.Equal(source.SyncCursor, after.SyncCursor)
 	assertMessageCount(t, env.Store, 4)
 }

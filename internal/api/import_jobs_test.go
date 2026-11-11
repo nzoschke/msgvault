@@ -477,11 +477,14 @@ func TestGetImportJobReturnsNotFoundForUnknownID(t *testing.T) {
 }
 
 func TestImportJobIdempotentSubmission(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	st := newImportJobTestStore()
 	defer st.finish()
 	srv := NewServer(&config.Config{}, st, nil, testLogger())
 	post := func(body string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/imports", strings.NewReader(body))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/imports", strings.NewReader(body))
 		req.Header.Set("Content-Type", applicationJSONMediaType)
 		resp := httptest.NewRecorder()
 		srv.Router().ServeHTTP(resp, req)
@@ -489,24 +492,24 @@ func TestImportJobIdempotentSubmission(t *testing.T) {
 	}
 	body := `{"account":"archive@example.com","query":"newer_than:2d","operation_id":"durable-id"}`
 	first := post(body)
-	require.Equal(t, 202, first.Code, first.Body.String())
+	requirements.Equal(202, first.Code, first.Body.String())
 	<-st.started
 	second := post(body)
-	require.Equal(t, 202, second.Code, second.Body.String())
+	requirements.Equal(202, second.Code, second.Body.String())
 	var response ImportJobResponse
-	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &response))
-	assert.Equal(t, "durable-id", response.JobID)
-	assert.Equal(t, int64(42), response.SourceID)
-	assert.Equal(t, []int64{100}, response.SyncRunIDs)
+	requirements.NoError(json.Unmarshal(second.Body.Bytes(), &response))
+	assertions.Equal("durable-id", response.JobID)
+	assertions.Equal(int64(42), response.SourceID)
+	assertions.Equal([]int64{100}, response.SyncRunIDs)
 	conflict := post(strings.Replace(body, "newer_than:2d", "newer_than:3d", 1))
-	assert.Equal(t, 409, conflict.Code)
+	assertions.Equal(409, conflict.Code)
 	select {
 	case <-st.entered:
 	default:
 	}
 	select {
 	case <-st.entered:
-		assert.Fail(t, "duplicate worker launched")
+		assertions.Fail("duplicate worker launched")
 	default:
 	}
 }

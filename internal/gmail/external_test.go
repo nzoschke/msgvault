@@ -18,7 +18,7 @@ func TestExternalClient(t *testing.T) {
 	require := require.New(t)
 	t.Chdir(t.TempDir())
 	socket := "token.sock"
-	listener, err := net.Listen("unix", socket)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", socket)
 	require.NoError(err)
 	var refreshes atomic.Int32
 	credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -2,9 +2,8 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
-	"io"
 	"mime"
 	"net/http"
 
@@ -13,7 +12,7 @@ import (
 )
 
 type BatchMessageImporter interface {
-	ImportMessages(context.Context, batchmessageimport.ImportMessagesRequest) (batchmessageimport.ImportMessagesResponse, error)
+	ImportMessages(ctx context.Context, in batchmessageimport.ImportMessagesRequest) (batchmessageimport.ImportMessagesResponse, error)
 }
 
 const batchMessageImportEndpointPath = "/api/v1/import/messages"
@@ -36,22 +35,10 @@ func (s *Server) handleBatchMessageImport(w http.ResponseWriter, r *http.Request
 		writeError(w, 415, "unsupported_media_type", "Content-Type must be application/json")
 		return
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, batchmessageimport.MaxRequestBytes))
-	decoder.DisallowUnknownFields()
 	var in batchmessageimport.ImportMessagesRequest
-	err = decoder.Decode(&in)
-	if err == nil {
-		var extra any
-		if tailErr := decoder.Decode(&extra); tailErr != io.EOF {
-			err = tailErr
-			if err == nil {
-				err = errors.New("unexpected trailing JSON")
-			}
-		}
-	}
+	err = json.UnmarshalRead(http.MaxBytesReader(w, r.Body, batchmessageimport.MaxRequestBytes), &in, json.RejectUnknownMembers(true))
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			writeError(w, 413, "request_too_large", "Message import exceeds 16 MiB")
 		} else {
 			writeError(w, 400, "bad_request", "Invalid message import JSON")

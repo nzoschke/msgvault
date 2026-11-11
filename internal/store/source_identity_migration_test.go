@@ -197,27 +197,32 @@ func TestMigrateSourceIdentityRejectsAndChangesNothing(t *testing.T) {
 }
 
 func TestMigrateSourceIdentityRollsBackAfterWrite(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	f := newMigrationFixture(t)
-	// A valid JSON scalar cannot be merged as an object. This failure happens
-	// after the source and first mapped message have already been updated.
-	require.NoError(t, f.archive.SetMessageMetadata(f.ids[1], nullString(`42`)))
+	requirements. // A valid JSON scalar cannot be merged as an object. This failure happens
+		// after the source and first mapped message have already been updated.
+		NoError(f.archive.SetMessageMetadata(f.ids[1], nullString(`42`)))
 	_, err := f.archive.MigrateSourceIdentityContext(t.Context(), f.in)
-	require.Error(t, err)
+	requirements.Error(err)
 	sourceType, keys := f.snapshot(t)
-	assert.Equal(t, "outlook", sourceType)
-	assert.Equal(t, "eml-1", keys[f.ids[0]])
+	assertions.Equal("outlook", sourceType)
+	assertions.Equal("eml-1", keys[f.ids[0]])
 	meta, err := f.archive.GetMessageMetadata(f.ids[0])
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"other":1}`, meta.String)
+	requirements.NoError(err)
+	assertions.JSONEq(`{"other":1}`, meta.String)
 }
 
 func TestMigrateSourceIdentityPreservesMatchingMetadata(t *testing.T) {
+	requirements := require.New(t)
+
 	f := newMigrationFixture(t)
 	metadata := `{"other":1,"_msgvault_outlook_migration":` + string(f.in.Messages[0].Metadata) + `}`
-	require.NoError(t, f.archive.SetMessageMetadata(f.ids[0], nullString(metadata)))
+	requirements.NoError(f.archive.SetMessageMetadata(f.ids[0], nullString(metadata)))
 	_, err := f.archive.MigrateSourceIdentityContext(t.Context(), f.in)
-	require.NoError(t, err)
+	requirements.NoError(err)
 	got, err := f.archive.GetMessageMetadata(f.ids[0])
-	require.NoError(t, err)
+	requirements.NoError(err)
 	assert.JSONEq(t, metadata, got.String)
 }

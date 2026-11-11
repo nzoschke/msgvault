@@ -4,9 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"maps"
 
 	"go.kenn.io/msgvault/internal/batchmessageimport"
 )
@@ -46,12 +48,12 @@ func (s *Store) ImportMessages(ctx context.Context, in batchmessageimport.Import
 			if len(m.Metadata) == 0 {
 				m.Metadata = nil
 			}
-			raw, err := json.Marshal(struct {
-				Message    batchmessageimport.ImportMessage
-				Projection *messageProjection
+			raw, err := marshalImportSnapshot(struct {
+				Message    batchmessageimport.ImportMessage `json:"Message"`
+				Projection *messageProjection               `json:"Projection"`
 			}{m, projection})
 			if projection == nil {
-				raw, err = json.Marshal(m)
+				raw, err = marshalImportSnapshot(m)
 			}
 			if err != nil {
 				return err
@@ -64,7 +66,7 @@ func (s *Store) ImportMessages(ctx context.Context, in batchmessageimport.Import
 			err = q.QueryRow(`SELECT id, COALESCE(metadata, '{}'), deleted_at, deleted_from_source_at FROM messages
 				WHERE source_id = ? AND source_message_id = ?`, out.SourceID, m.SourceMessageID).Scan(&id, &metadata, &deleted, &sourceDeleted)
 			if err == nil {
-				var prior map[string]json.RawMessage
+				var prior map[string]jsontext.Value
 				var hash string
 				if json.Unmarshal([]byte(metadata), &prior) != nil || json.Unmarshal(prior[batchmessageimport.MetadataKey], &hash) != nil || deleted.Valid || sourceDeleted.Valid {
 					return batchmessageimport.ErrConflict
@@ -83,9 +85,7 @@ func (s *Store) ImportMessages(ctx context.Context, in batchmessageimport.Import
 				return err
 			}
 			meta := map[string]any{batchmessageimport.MetadataKey: digest}
-			for key, value := range m.Metadata {
-				meta[key] = value
-			}
+			maps.Copy(meta, m.Metadata)
 			conversationType := "document"
 			if projection != nil {
 				meta[batchmessageimport.ProjectionKey] = projection
@@ -122,4 +122,10 @@ func (s *Store) ImportMessages(ctx context.Context, in batchmessageimport.Import
 		return batchmessageimport.ImportMessagesResponse{}, err
 	}
 	return out, nil
+}
+
+// Import fingerprints are persisted identities. Keep the original JSON encoding
+// (including sorted maps, escaped text, and null collections) across upgrades.
+func marshalImportSnapshot(value any) ([]byte, error) {
+	return json.Marshal(value, json.Deterministic(true), json.FormatNilMapAsNull(true), json.FormatNilSliceAsNull(true), jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
 }
