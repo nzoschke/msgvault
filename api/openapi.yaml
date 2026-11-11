@@ -6813,6 +6813,10 @@ components:
           type: integer
         noresume:
           type: boolean
+        operation_id:
+          maxLength: 128
+          pattern: ^[a-zA-Z0-9_-]+$
+          type: string
         query:
           description: Gmail search query; not supported for IMAP sources
           type: string
@@ -6845,6 +6849,9 @@ components:
         skipped:
           format: int64
           type: integer
+        source_id:
+          format: int64
+          type: integer
         started_at:
           format: date-time
           type:
@@ -6859,7 +6866,14 @@ components:
           type: string
         summary:
           $ref: "#/components/schemas/ImportJobSummary"
+        sync_run_ids:
+          items:
+            format: int64
+            type: integer
+          type: array
       required:
+        - source_id
+        - sync_run_ids
         - job_id
         - account
         - status
@@ -6894,6 +6908,91 @@ components:
         - updated
         - skipped
         - errors
+      type: object
+    ImportMessage:
+      additionalProperties: false
+      properties:
+        body_text:
+          maxLength: 2097152
+          minLength: 1
+          type: string
+        metadata:
+          additionalProperties: {}
+          type: object
+          x-go-type: map[string]any
+        original_message_id:
+          format: int64
+          minimum: 1
+          type: integer
+        sent_at:
+          format: date-time
+          type: string
+        source_conversation_id:
+          maxLength: 512
+          minLength: 1
+          type: string
+        source_message_id:
+          maxLength: 512
+          minLength: 1
+          type: string
+        subject:
+          maxLength: 4096
+          minLength: 1
+          type: string
+      required:
+        - source_message_id
+        - source_conversation_id
+        - subject
+        - sent_at
+        - body_text
+      type: object
+    ImportMessageResult:
+      additionalProperties: true
+      properties:
+        message_id:
+          format: int64
+          type: integer
+        source_message_id:
+          type: string
+        status:
+          enum:
+            - created
+            - unchanged
+            - updated
+          type: string
+      required:
+        - source_message_id
+        - message_id
+        - status
+      type: object
+    ImportMessagesRequest:
+      additionalProperties: false
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/ImportMessage"
+          maxItems: 100
+          minItems: 1
+          type: array
+        source:
+          $ref: "#/components/schemas/ImportSource"
+      required:
+        - source
+        - messages
+      type: object
+    ImportMessagesResponse:
+      additionalProperties: true
+      properties:
+        messages:
+          items:
+            $ref: "#/components/schemas/ImportMessageResult"
+          type: array
+        source_id:
+          format: int64
+          type: integer
+      required:
+        - source_id
+        - messages
       type: object
     ImportRequest:
       additionalProperties: false
@@ -6938,6 +7037,24 @@ components:
         - signal
         - candidates
         - applied
+      type: object
+    ImportSource:
+      additionalProperties: false
+      properties:
+        display_name:
+          maxLength: 512
+          type: string
+        identifier:
+          maxLength: 512
+          minLength: 1
+          type: string
+        type:
+          maxLength: 80
+          minLength: 1
+          type: string
+      required:
+        - type
+        - identifier
       type: object
     ImportedMessage:
       additionalProperties: false
@@ -17247,7 +17364,7 @@ components:
       type: apiKey
 info:
   title: msgvault API
-  version: 5.2.0
+  version: 5.3.0
 openapi: 3.1.0
 paths:
   /api/ping:
@@ -21057,6 +21174,11 @@ paths:
           schema:
             format: int64
             type: integer
+        - description: Unique caller ID for this sync attempt
+          in: query
+          name: operation_id
+          schema:
+            type: string
         - description: Ignore checkpoints and start fresh
           in: query
           name: noresume
@@ -23588,6 +23710,81 @@ paths:
       security:
         - apiKey: []
       summary: Import one message
+      tags:
+        - API
+  /api/v1/import/messages:
+    post:
+      operationId: importMessages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportMessagesRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportMessagesResponse"
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "413":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "415":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+          description: Error
+      security:
+        - apiKey: []
+      summary: Import documents or project archived emails into a versioned custom source
       tags:
         - API
   /api/v1/import/muesli:

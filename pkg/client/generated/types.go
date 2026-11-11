@@ -6616,11 +6616,12 @@ func (i ImportEntry) Validate() error {
 }
 
 type ImportJobRequest struct {
-	Account  string  `json:"account" validate:"required,min=1"`
-	After    *string `json:"after,omitzero"`
-	Before   *string `json:"before,omitzero"`
-	Limit    *int64  `json:"limit,omitempty" validate:"omitempty,gte=0"`
-	Noresume *bool   `json:"noresume,omitempty"`
+	Account     string  `json:"account" validate:"required,min=1"`
+	After       *string `json:"after,omitzero"`
+	Before      *string `json:"before,omitzero"`
+	Limit       *int64  `json:"limit,omitempty" validate:"omitempty,gte=0"`
+	Noresume    *bool   `json:"noresume,omitempty"`
+	OperationID *string `json:"operation_id,omitzero" validate:"omitempty,max=128"`
 
 	// Query Gmail search query; not supported for IMAP sources
 	Query *string `json:"query,omitzero"`
@@ -6642,6 +6643,14 @@ func (i ImportJobRequest) Validate() error {
 			errors = errors.Append("Limit", err)
 		}
 	}
+	if i.OperationID != nil {
+		if err := typesValidator.Var(i.OperationID, "omitempty,max=128"); err != nil {
+			errors = errors.Append("OperationID", err)
+		}
+	}
+	if err := runtime.ValidatePattern(i.OperationID, `^[a-zA-Z0-9_-]+$`); err != nil {
+		errors = errors.Append("OperationID", err)
+	}
 	if len(errors) == 0 {
 		return nil
 	}
@@ -6657,9 +6666,11 @@ type ImportJobResponse struct {
 	JobID      string                  `json:"job_id" validate:"required"`
 	Processed  int64                   `json:"processed"`
 	Skipped    int64                   `json:"skipped"`
+	SourceID   int64                   `json:"source_id"`
 	StartedAt  *time.Time              `json:"started_at" validate:"required"`
 	Status     ImportJobResponseStatus `json:"status" validate:"required"`
 	Summary    *ImportJobSummary       `json:"summary,omitempty"`
+	SyncRunIds []int64                 `json:"sync_run_ids" validate:"required"`
 }
 
 func (i ImportJobResponse) Validate() error {
@@ -6695,6 +6706,9 @@ func (i ImportJobResponse) Validate() error {
 			}
 		}
 	}
+	if err := typesValidator.Var(i.SyncRunIds, "required"); err != nil {
+		errors = errors.Append("SyncRunIds", err)
+	}
 	if len(errors) == 0 {
 		return nil
 	}
@@ -6707,6 +6721,99 @@ type ImportJobSummary struct {
 	Processed int64 `json:"processed"`
 	Skipped   int64 `json:"skipped"`
 	Updated   int64 `json:"updated"`
+}
+
+type ImportMessage struct {
+	BodyText             string         `json:"body_text" validate:"required,max=2097152,min=1"`
+	Metadata             map[string]any `json:"metadata,omitempty"`
+	OriginalMessageID    *int64         `json:"original_message_id,omitempty" validate:"omitempty,gte=1"`
+	SentAt               time.Time      `json:"sent_at" validate:"required"`
+	SourceConversationID string         `json:"source_conversation_id" validate:"required,max=512,min=1"`
+	SourceMessageID      string         `json:"source_message_id" validate:"required,max=512,min=1"`
+	Subject              string         `json:"subject" validate:"required,max=4096,min=1"`
+}
+
+func (i ImportMessage) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(i))
+}
+
+type ImportMessageResult struct {
+	MessageID       int64                     `json:"message_id"`
+	SourceMessageID string                    `json:"source_message_id" validate:"required"`
+	Status          ImportMessageResultStatus `json:"status" validate:"required"`
+}
+
+func (i ImportMessageResult) Validate() error {
+	var errors runtime.ValidationErrors
+	if err := typesValidator.Var(i.SourceMessageID, "required"); err != nil {
+		errors = errors.Append("SourceMessageID", err)
+	}
+	if v, ok := any(i.Status).(runtime.Validator); ok {
+		if err := v.Validate(); err != nil {
+			errors = errors.Append("Status", err)
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
+type ImportMessagesRequest struct {
+	Messages []ImportMessage `json:"messages" validate:"required"`
+	Source   ImportSource    `json:"source"`
+}
+
+func (i ImportMessagesRequest) Validate() error {
+	var errors runtime.ValidationErrors
+	if err := typesValidator.Var(i.Messages, "required"); err != nil {
+		errors = errors.Append("Messages", err)
+	}
+	if i.Messages != nil && len(i.Messages) < 1 {
+		errors = errors.Add("Messages", fmt.Sprintf("must have at least 1 items, got %d", len(i.Messages)))
+	}
+	if len(i.Messages) > 100 {
+		errors = errors.Add("Messages", fmt.Sprintf("must have at most 100 items, got %d", len(i.Messages)))
+	}
+	for i, item := range i.Messages {
+		if v, ok := any(item).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append(fmt.Sprintf("Messages[%d]", i), err)
+			}
+		}
+	}
+	if v, ok := any(i.Source).(runtime.Validator); ok {
+		if err := v.Validate(); err != nil {
+			errors = errors.Append("Source", err)
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
+}
+
+type ImportMessagesResponse struct {
+	Messages []ImportMessageResult `json:"messages" validate:"required"`
+	SourceID int64                 `json:"source_id"`
+}
+
+func (i ImportMessagesResponse) Validate() error {
+	var errors runtime.ValidationErrors
+	if err := typesValidator.Var(i.Messages, "required"); err != nil {
+		errors = errors.Append("Messages", err)
+	}
+	for i, item := range i.Messages {
+		if v, ok := any(item).(runtime.Validator); ok {
+			if err := v.Validate(); err != nil {
+				errors = errors.Append(fmt.Sprintf("Messages[%d]", i), err)
+			}
+		}
+	}
+	if len(errors) == 0 {
+		return nil
+	}
+	return errors
 }
 
 type ImportRequest struct {
@@ -6775,6 +6882,16 @@ func (i ImportResult) Validate() error {
 		return nil
 	}
 	return errors
+}
+
+type ImportSource struct {
+	DisplayName *string `json:"display_name,omitzero" validate:"omitempty,max=512"`
+	Identifier  string  `json:"identifier" validate:"required,max=512,min=1"`
+	Type        string  `json:"type" validate:"required,max=80,min=1"`
+}
+
+func (i ImportSource) Validate() error {
+	return runtime.ConvertValidatorError(typesValidator.Struct(i))
 }
 
 type ImportedMessage struct {
@@ -16239,6 +16356,9 @@ type SyncRunResults struct {
 
 func (s SyncRunResults) Validate() error {
 	var errors runtime.ValidationErrors
+	if err := typesValidator.Var(s.Items, "required"); err != nil {
+		errors = errors.Append("Items", err)
+	}
 	for i, item := range s.Items {
 		if v, ok := any(item).(runtime.Validator); ok {
 			if err := v.Validate(); err != nil {

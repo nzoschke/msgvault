@@ -42,7 +42,7 @@ const (
 
 // Options configures sync behavior.
 type Options struct {
-	RelayedSenders []mime.RelayedSenderRule
+	RelayedSenders  []mime.RelayedSenderRule
 	InitialBackfill bool
 
 	// SourceType is the type of source being synced ("gmail" or "imap").

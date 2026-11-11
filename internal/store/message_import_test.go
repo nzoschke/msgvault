@@ -21,7 +21,7 @@ func TestImportMessagesSnapshots(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, first.Messages, 1)
 	assert.Equal(t, "created", first.Messages[0].Status)
-	body, err := st.GetMessageBodyText(first.Messages[0].MessageID)
+	body, err := st.GetMessageBodyText(t.Context(), first.Messages[0].MessageID)
 	require.NoError(t, err)
 	assert.Equal(t, in.Messages[0].BodyText, body)
 	retry, err := st.ImportMessages(t.Context(), in)
