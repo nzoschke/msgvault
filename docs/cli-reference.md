@@ -5880,3 +5880,47 @@ An existing Outlook EML import must be migrated before registering its native
 source, to avoid duplicating the archive. OAuth flags, including `--mail-write`,
 are unavailable with external credentials. See
 [external Microsoft mail configuration](configuration.md#external-microsoft-mail-credentials).
+
+## migrate-outlook
+
+Manually convert an Outlook EML import (`source_type=outlook`) into a native
+Graph mail source (`msmail`). Stop sync and other archive writers and back up the
+archive and importer receipts before running this command on the daemon host.
+Nothing schedules or invokes it automatically.
+
+```sh
+msgvault --home /path/to/vault --local migrate-outlook --input /absolute/path/mapping.json
+```
+
+The reviewed JSON mapping must identify the archive, mailbox, source and every
+existing message. Obtain immutable Graph IDs from the import receipts; do not
+infer them from subjects or EML hashes.
+
+```json
+{
+  "archive_uid": "archive-uid",
+  "source_id": 7,
+  "account": "you@example.com",
+  "messages": [{
+    "message_id": 42,
+    "source_message_id": "eml-original-hash",
+    "provider_message_id": "immutable-graph-id",
+    "metadata": {"id": "immutable-graph-id"}
+  }],
+  "unmapped": [{"message_id": 43, "source_message_id": "eml-unmapped-hash"}]
+}
+```
+
+One transaction changes the source type and mapped provider identities. Canonical
+source/message row IDs, MIME, attachments and label memberships remain intact.
+Unmapped rows keep their original identities. Conflicting, duplicate or incomplete
+mappings fail without changes; repeating an applied mapping is a no-op. Input is
+limited to 256 MiB. Output reports `archive_uid`, `source_id`, `messages` and
+`changed`.
+
+The supplied metadata is retained under `_msgvault_outlook_migration` as historical
+provenance. Native sync does not maintain it as live Graph state. Configure external
+credentials and run `sync --source-id SOURCE_ID` afterwards to observe upstream's
+folder and category labels. Changed messages and drafts may require another MIME
+read. Changes to another application's identity references remain that application's
+responsibility.
