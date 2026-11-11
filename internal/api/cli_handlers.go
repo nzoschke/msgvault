@@ -1843,6 +1843,7 @@ func cliRunCommandAllowed(args []string) bool {
 		"list-deletions",
 		"list-folders",
 		"logs",
+		"migrate-outlook",
 		"pack-attachments",
 		"purge-excluded-media",
 		"policy",
