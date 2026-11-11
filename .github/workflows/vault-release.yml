@@ -45,13 +45,13 @@ jobs:
           test "$VERSION_ID" = 22.04
           for tool in gcc g++ git curl tar gzip make unzip; do command -v "$tool"; done
           test -f /usr/include/sqlite3.h
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@v7.0.0
         with:
           ref: ${{ inputs.version || github.ref_name }}
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@v4.4.0
         with:
           node-version: 22.21.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      - uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: 1.3.14
       - name: Install Go
@@ -75,7 +75,7 @@ jobs:
           mkdir dist/unpacked
           tar -xzf dist/*.tar.gz -C dist/unpacked
           scripts/smoke-vault-release.sh dist/unpacked/msgvault
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: linux-${{ matrix.arch }}
           path: |
@@ -88,7 +88,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+      - uses: actions/download-artifact@v8.0.1
         with:
           path: dist
           merge-multiple: true

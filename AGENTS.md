@@ -180,13 +180,10 @@ Use these as reasoning checkpoints, not a requirement to create a design doc.
 
 ## CI runners
 
-CI jobs use GitHub-hosted runners. The `CI gate`, `changes`, and
-`Sibling pins on main` jobs take seconds and run on the Namespace profile
-`namespace-profile-linux-1cpu`, so they do not wait in the GitHub-hosted queue.
-That profile uses Namespace's
-[Restricted access level](https://namespace.so/docs/solutions/github-actions/runner-controls/access-levels),
-which disables workload access to Namespace features and APIs. GitHub fork
-approvals, token permissions, and secrets are separate controls.
+CI jobs use GitHub-hosted runners, including the change filter, CI gate, and
+sibling-pin check. PR CI calls the workflow in this checkout so fork-specific
+runner and build settings are exercised. Upstream's Namespace runner profile
+is not configured in this fork.
 
 ## Test data
 
