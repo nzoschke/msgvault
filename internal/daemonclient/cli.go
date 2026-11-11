@@ -452,7 +452,7 @@ func (c *Client) RunCLISync(
 			return err
 		}
 		if !req.Full || !apiSchemaVersionAtLeast(version, "3.7.0") {
-			return fmt.Errorf("operation IDs require sync-full and daemon API schema 3.7.0 or newer")
+			return errors.New("operation IDs require sync-full and daemon API schema 3.7.0 or newer")
 		}
 	}
 	if req.BuildCache || req.NoBuildCache {

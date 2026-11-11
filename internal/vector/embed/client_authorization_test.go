@@ -1,11 +1,9 @@
 package embed
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +21,9 @@ func TestClientEndpointBoundAuthorization(t *testing.T) {
 		{name: "redirect", redirect: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			calls := 0
 			targetCalls := 0
 			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { targetCalls++ }))
@@ -34,7 +35,7 @@ func TestClientEndpointBoundAuthorization(t *testing.T) {
 					http.Redirect(w, r, target.URL, http.StatusTemporaryRedirect)
 					return
 				}
-				fmt.Fprint(w, `{"data":[{"index":0,"embedding":[0.1,0.2]}]}`)
+				_, _ = fmt.Fprint(w, `{"data":[{"index":0,"embedding":[0.1,0.2]}]}`)
 			}))
 			defer server.Close()
 			t.Setenv("TEST_EMBED_AUTH", "Basic dGVzdDpzZWNyZXQ=")
@@ -46,18 +47,18 @@ func TestClientEndpointBoundAuthorization(t *testing.T) {
 				t.Setenv("TEST_EMBED_ENDPOINT", target.URL)
 			}
 			client := NewClient(Config{Endpoint: server.URL, AuthorizationEnv: "TEST_EMBED_AUTH", AuthorizationEndpointEnv: "TEST_EMBED_ENDPOINT", Model: "text-embedding-3-small", Dimension: 2})
-			_, err := client.Embed(context.Background(), []string{"synthetic test"})
+			_, err := client.Embed(t.Context(), []string{"synthetic test"})
 			if tt.missing || tt.wrongEndpoint || tt.redirect {
-				require.Error(t, err)
+				requirements.Error(err)
 			} else {
-				require.NoError(t, err)
+				requirements.NoError(err)
 			}
 			if tt.missing || tt.wrongEndpoint {
-				assert.Zero(t, calls)
+				assertions.Zero(calls)
 			} else {
-				assert.Equal(t, 1, calls)
+				assertions.Equal(1, calls)
 			}
-			assert.Zero(t, targetCalls)
+			assertions.Zero(targetCalls)
 		})
 	}
 }
@@ -71,6 +72,9 @@ func TestClientEndpointAuthorizationOnRetry(t *testing.T) {
 		{name: "revoked credential", revoke: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			calls := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
@@ -80,7 +84,7 @@ func TestClientEndpointAuthorizationOnRetry(t *testing.T) {
 					if tt.revoke {
 						next = ""
 					}
-					assert.NoError(t, os.Setenv("TEST_EMBED_AUTH", next))
+					t.Setenv("TEST_EMBED_AUTH", next)
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
@@ -94,11 +98,11 @@ func TestClientEndpointAuthorizationOnRetry(t *testing.T) {
 			client := NewClient(Config{Endpoint: server.URL, AuthorizationEnv: "TEST_EMBED_AUTH", AuthorizationEndpointEnv: "TEST_EMBED_ENDPOINT", Model: "text-embedding-3-small", Dimension: 2})
 			_, err := client.Embed(t.Context(), []string{"synthetic test"})
 			if tt.revoke {
-				require.ErrorContains(t, err, "embedding authorization is unavailable")
-				assert.Equal(t, 1, calls)
+				requirements.ErrorContains(err, "embedding authorization is unavailable")
+				assertions.Equal(1, calls)
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, 2, calls)
+				requirements.NoError(err)
+				assertions.Equal(2, calls)
 			}
 		})
 	}

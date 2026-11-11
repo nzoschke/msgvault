@@ -169,7 +169,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 			switch src.SourceType {
 			case sourceTypeGmail:
 				if cfg.Gmail.External == nil && !cfg.OAuth.HasAnyConfig() {
-					fmt.Fprintf(syncTextOutput(), "Skipping %s (OAuth not configured)\n", src.Identifier)
+					_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (OAuth not configured)\n", src.Identifier)
 					continue
 				}
 				appName := sourceOAuthApp(src)
@@ -186,7 +186,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 						continue
 					}
 					if !info.Exists {
-						fmt.Fprintf(syncTextOutput(), "Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
+						_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
 						continue
 					}
 				}
@@ -197,11 +197,11 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 					continue
 				}
 				if skipMsg != "" {
-					fmt.Fprintln(syncTextOutput(), skipMsg)
+					_, _ = fmt.Fprintln(syncTextOutput(), skipMsg)
 					continue
 				}
 			default:
-				fmt.Fprintf(syncTextOutput(), "Skipping %s (unsupported source type %q)\n", src.Identifier, src.SourceType)
+				_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (unsupported source type %q)\n", src.Identifier, src.SourceType)
 				continue
 			}
 			sources = append(sources, src)
@@ -223,7 +223,7 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Fprintln(syncTextOutput(), "\nInterrupted. Saving checkpoint...")
+		_, _ = fmt.Fprintln(syncTextOutput(), "\nInterrupted. Saving checkpoint...")
 		cancel()
 	}()
 
@@ -259,10 +259,10 @@ func runSyncFullLocal(cmd *cobra.Command, args []string) error {
 
 	if len(syncErrors) > 0 {
 		cacheErr = finishSyncJSON(errors.Join(cacheErr, ctx.Err()))
-		fmt.Fprintln(syncTextOutput())
-		fmt.Fprintln(syncTextOutput(), "Errors:")
+		_, _ = fmt.Fprintln(syncTextOutput())
+		_, _ = fmt.Fprintln(syncTextOutput(), "Errors:")
 		for _, e := range syncErrors {
-			fmt.Fprintf(syncTextOutput(), "  %s\n", e)
+			_, _ = fmt.Fprintf(syncTextOutput(), "  %s\n", e)
 		}
 		return errors.Join(
 			fmt.Errorf("%d account(s) failed to sync: %s", len(syncErrors), strings.Join(syncErrors, "; ")),
@@ -652,7 +652,7 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(ctx conte
 		// --after/--before are handled natively by IMAP SEARCH;
 		// only warn about --query which has no IMAP equivalent.
 		if syncQuery != "" {
-			fmt.Fprintf(syncTextOutput(), "Warning: --query is not supported for IMAP sources and will be ignored.\n\n")
+			_, _ = fmt.Fprintf(syncTextOutput(), "Warning: --query is not supported for IMAP sources and will be ignored.\n\n")
 		}
 		query = ""
 	}
@@ -692,11 +692,11 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(ctx conte
 	if src.DisplayName.Valid && src.DisplayName.String != "" {
 		displayID = src.DisplayName.String
 	}
-	fmt.Fprintf(syncTextOutput(), "Starting full sync for %s\n", displayID)
+	_, _ = fmt.Fprintf(syncTextOutput(), "Starting full sync for %s\n", displayID)
 	if query != "" && src.SourceType != sourceTypeIMAP {
-		fmt.Fprintf(syncTextOutput(), "Query: %s\n", query)
+		_, _ = fmt.Fprintf(syncTextOutput(), "Query: %s\n", query)
 	}
-	fmt.Fprintln(syncTextOutput())
+	_, _ = fmt.Fprintln(syncTextOutput())
 	syncSource := src
 	if syncSource.ID == 0 {
 		sourceType := syncSource.SourceType
@@ -727,9 +727,9 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(ctx conte
 	if err != nil {
 		if ctx.Err() != nil {
 			if opts.NoResume {
-				fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to restart (already-imported messages will be skipped).")
+				_, _ = fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to restart (already-imported messages will be skipped).")
 			} else {
-				fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to resume.")
+				_, _ = fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to resume.")
 			}
 			return ctx.Err()
 		}
@@ -746,24 +746,24 @@ func runFullSync(ctx context.Context, s *store.Store, getOAuthMgr func(ctx conte
 	// Print summary; skip the spacer when no progress lines were
 	// printed so a no-op sync doesn't emit stacked blank lines.
 	if progress.printedAnything() {
-		fmt.Fprintln(syncTextOutput())
+		_, _ = fmt.Fprintln(syncTextOutput())
 	}
-	fmt.Fprintln(syncTextOutput(), "Sync complete!")
-	fmt.Fprintf(syncTextOutput(), "  Duration:      %s\n", summary.Duration.Round(time.Second))
-	fmt.Fprintf(syncTextOutput(), "  Messages:      %d found, %d added, %d skipped\n",
+	_, _ = fmt.Fprintln(syncTextOutput(), "Sync complete!")
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Duration:      %s\n", summary.Duration.Round(time.Second))
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Messages:      %d found, %d added, %d skipped\n",
 		summary.MessagesFound, summary.MessagesAdded, summary.MessagesSkipped)
-	fmt.Fprintf(syncTextOutput(), "  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
 	if summary.Errors > 0 {
-		fmt.Fprintf(syncTextOutput(), "  Errors:        %d\n", summary.Errors)
+		_, _ = fmt.Fprintf(syncTextOutput(), "  Errors:        %d\n", summary.Errors)
 	}
 	if summary.WasResumed {
-		fmt.Fprintf(syncTextOutput(), "  (Resumed from checkpoint)\n")
+		_, _ = fmt.Fprintf(syncTextOutput(), "  (Resumed from checkpoint)\n")
 	}
 
 	// Print timing stats
 	if summary.MessagesAdded > 0 {
 		messagesPerSec := float64(summary.MessagesAdded) / summary.Duration.Seconds()
-		fmt.Fprintf(syncTextOutput(), "  Rate:          %.1f messages/sec\n", messagesPerSec)
+		_, _ = fmt.Fprintf(syncTextOutput(), "  Rate:          %.1f messages/sec\n", messagesPerSec)
 	}
 
 	elapsed := time.Since(startTime)

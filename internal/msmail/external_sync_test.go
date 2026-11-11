@@ -3,6 +3,7 @@ package msmail
 import (
 	"bytes"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,9 @@ import (
 )
 
 func TestExternalSyncUsesUpstreamCategories(t *testing.T) {
+	assertions := assert.New(t)
+	requirements := require.New(t)
+
 	var refreshes atomic.Int32
 	socket := credentialSocket(t, &refreshes)
 	graph := newFakeGraph(t)
@@ -28,39 +32,37 @@ func TestExternalSyncUsesUpstreamCategories(t *testing.T) {
 		req.URL.Path = strings.TrimPrefix(r.URL.Path, "/proxy")
 		response := httptest.NewRecorder()
 		graph.serve(response, req)
-		for key, values := range response.Header() {
-			w.Header()[key] = values
-		}
+		maps.Copy(w.Header(), response.Header())
 		w.WriteHeader(response.Code)
 		_, _ = w.Write(bytes.ReplaceAll(response.Body.Bytes(), []byte(graph.srv.URL), []byte(GraphBaseURL)))
 	}))
 	defer proxy.Close()
 	client, err := NewExternalClient(ExternalIn{Account: "alice@example.com", Endpoint: proxy.URL + "/proxy", CredentialSocket: socket, QPS: 10000})
-	require.NoError(t, err)
+	requirements.NoError(err)
 	archive := testutil.NewTestStore(t)
 	opts := Options{Email: "alice@example.com", AttachmentsDir: t.TempDir()}
 	first, err := Import(t.Context(), archive, client, opts, slog.Default())
-	require.NoError(t, err)
-	require.Positive(t, first.SyncRunID)
+	requirements.NoError(err)
+	requirements.Positive(first.SyncRunID)
 	ids, err := archive.MessageExistsBatch(first.SourceID, []string{"m1"})
-	require.NoError(t, err)
+	requirements.NoError(err)
 	id := ids["m1"]
-	require.Positive(t, id)
+	requirements.Positive(id)
 	for _, categories := range [][]string{{"VIP", "Work"}, {"FYI", "Work"}, {}} {
 		graph.mu.Lock()
 		graph.categories["m1"] = categories
 		graph.mu.Unlock()
 		graph.put("m1", "inbox")
 		result, err := Import(t.Context(), archive, client, opts, slog.Default())
-		require.NoError(t, err)
-		assert.Zero(t, result.Errors)
+		requirements.NoError(err)
+		assertions.Zero(result.Errors)
 		message, err := archive.GetMessage(id)
-		require.NoError(t, err)
+		requirements.NoError(err)
 		want := []string{"Inbox"}
 		for _, category := range categories {
 			want = append(want, "Category: "+category)
 		}
-		assert.ElementsMatch(t, want, message.Labels)
+		assertions.ElementsMatch(want, message.Labels)
 	}
-	assert.Zero(t, refreshes.Load())
+	assertions.Zero(refreshes.Load())
 }

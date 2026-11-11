@@ -91,7 +91,7 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Fprintln(syncTextOutput(), "\nInterrupted. Saving checkpoint...")
+		_, _ = fmt.Fprintln(syncTextOutput(), "\nInterrupted. Saving checkpoint...")
 		cancel()
 	}()
 
@@ -160,12 +160,12 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 			switch src.SourceType {
 			case sourceTypeGmail:
 				if cfg.Gmail.External == nil && !cfg.OAuth.HasAnyConfig() {
-					fmt.Fprintf(syncTextOutput(), "Skipping %s (OAuth not configured)\n", src.Identifier)
+					_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (OAuth not configured)\n", src.Identifier)
 					continue
 				}
 				appName := sourceOAuthApp(src)
 				if cfg.Gmail.External == nil && (!src.SyncCursor.Valid || src.SyncCursor.String == "") {
-					fmt.Fprintf(syncTextOutput(), "Skipping %s (no history ID - run 'sync-full' first)\n", src.Identifier)
+					_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (no history ID - run 'sync-full' first)\n", src.Identifier)
 					continue
 				}
 				// Service accounts are always ready
@@ -181,7 +181,7 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 						continue
 					}
 					if !info.Exists {
-						fmt.Fprintf(syncTextOutput(), "Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
+						_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (no OAuth token - run 'add-account' first)\n", src.Identifier)
 						continue
 					}
 				}
@@ -193,13 +193,13 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 					continue
 				}
 				if skipMsg != "" {
-					fmt.Fprintln(syncTextOutput(), skipMsg)
+					_, _ = fmt.Fprintln(syncTextOutput(), skipMsg)
 					continue
 				}
 				imapTargets = append(imapTargets, src)
 			case sourceTypeMSMail:
 				if !msmailReady(src.Identifier, state) {
-					fmt.Fprintf(syncTextOutput(), "Skipping %s (no Microsoft Graph token - run 'add-o365 %s --graph' first)\n", src.Identifier, src.Identifier)
+					_, _ = fmt.Fprintf(syncTextOutput(), "Skipping %s (no Microsoft Graph token - run 'add-o365 %s --graph' first)\n", src.Identifier, src.Identifier)
 					continue
 				}
 				msmailTargets = append(msmailTargets, src)
@@ -221,7 +221,7 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 		if ctx.Err() != nil {
 			break
 		}
-		fmt.Fprintf(syncTextOutput(), "Note: IMAP account %s uses folder-based sync. Unchanged folders are skipped when high water marks are available.\n\n", src.Identifier)
+		_, _ = fmt.Fprintf(syncTextOutput(), "Note: IMAP account %s uses folder-based sync. Unchanged folders are skipped when high water marks are available.\n\n", src.Identifier)
 		if err := runFullSync(ctx, s, getOAuthMgr, src, state); err != nil {
 			syncErrors = append(syncErrors, fmt.Sprintf("%s: %v", src.Identifier, err))
 		}
@@ -232,8 +232,8 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 		if ctx.Err() != nil {
 			break
 		}
-		fmt.Fprintf(syncTextOutput(), "Syncing Microsoft Graph mail for %s\n", src.Identifier)
-		sum, err := runMSMailSync(ctx, s, src.Identifier, func(line string) { fmt.Fprintln(syncTextOutput(), line) }, state)
+		_, _ = fmt.Fprintf(syncTextOutput(), "Syncing Microsoft Graph mail for %s\n", src.Identifier)
+		sum, err := runMSMailSync(ctx, s, src.Identifier, func(line string) { _, _ = fmt.Fprintln(syncTextOutput(), line) }, state)
 		if sum != nil && syncJSON {
 			recordMSMailSyncJSON(sum, src)
 		}
@@ -243,7 +243,7 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 		}
 		if syncJSON {
 			if sum.Errors > 0 {
-				syncErrors = append(syncErrors, fmt.Sprintf("%s: sync has unresolved message errors", src.Identifier))
+				syncErrors = append(syncErrors, src.Identifier+": sync has unresolved message errors")
 			}
 			continue
 		}
@@ -270,10 +270,10 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 
 	if len(syncErrors) > 0 {
 		cacheErr = finishSyncJSON(errors.Join(cacheErr, ctx.Err()))
-		fmt.Fprintln(syncTextOutput())
-		fmt.Fprintln(syncTextOutput(), "Errors:")
+		_, _ = fmt.Fprintln(syncTextOutput())
+		_, _ = fmt.Fprintln(syncTextOutput(), "Errors:")
 		for _, e := range syncErrors {
-			fmt.Fprintf(syncTextOutput(), "  %s\n", e)
+			_, _ = fmt.Fprintf(syncTextOutput(), "  %s\n", e)
 		}
 		return errors.Join(
 			fmt.Errorf("%d account(s) failed to sync: %s", len(syncErrors), strings.Join(syncErrors, "; ")),
@@ -318,21 +318,21 @@ func runIncrementalSync(ctx context.Context, s *store.Store, getOAuthMgr func(ct
 
 	// Run incremental sync
 	startTime := time.Now()
-	fmt.Fprintf(syncTextOutput(), "Starting incremental sync for %s\n", email)
-	fmt.Fprintf(syncTextOutput(), "Last history ID: %s\n", source.SyncCursor.String)
+	_, _ = fmt.Fprintf(syncTextOutput(), "Starting incremental sync for %s\n", email)
+	_, _ = fmt.Fprintf(syncTextOutput(), "Last history ID: %s\n", source.SyncCursor.String)
 
 	summary, err := syncer.IncrementalWithHistoryRecovery(ctx, source, func(resumed bool) {
 		if resumed {
-			fmt.Fprintln(syncTextOutput(), "Resuming complete mailbox reconciliation after interruption.")
+			_, _ = fmt.Fprintln(syncTextOutput(), "Resuming complete mailbox reconciliation after interruption.")
 		} else {
-			fmt.Fprintln(syncTextOutput(), "History ID has expired (Gmail keeps only ~7 days of history).")
-			fmt.Fprintln(syncTextOutput(), "Reconciling the complete mailbox; already-archived messages are skipped.")
+			_, _ = fmt.Fprintln(syncTextOutput(), "History ID has expired (Gmail keeps only ~7 days of history).")
+			_, _ = fmt.Fprintln(syncTextOutput(), "Reconciling the complete mailbox; already-archived messages are skipped.")
 		}
-		fmt.Fprintln(syncTextOutput())
+		_, _ = fmt.Fprintln(syncTextOutput())
 	})
 	if err != nil {
 		if ctx.Err() != nil {
-			fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to resume.")
+			_, _ = fmt.Fprintln(syncTextOutput(), "\nSync interrupted. Run again to resume.")
 			return ctx.Err()
 		}
 		return fmt.Errorf("sync failed: %w", err)
@@ -346,14 +346,14 @@ func runIncrementalSync(ctx context.Context, s *store.Store, getOAuthMgr func(ct
 		return ctx.Err()
 	}
 	// Print summary
-	fmt.Fprintln(syncTextOutput())
-	fmt.Fprintln(syncTextOutput(), "Sync complete!")
-	fmt.Fprintf(syncTextOutput(), "  Duration:      %s\n", summary.Duration.Round(time.Second))
-	fmt.Fprintf(syncTextOutput(), "  Changes:       %d processed, %d added\n",
+	_, _ = fmt.Fprintln(syncTextOutput())
+	_, _ = fmt.Fprintln(syncTextOutput(), "Sync complete!")
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Duration:      %s\n", summary.Duration.Round(time.Second))
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Changes:       %d processed, %d added\n",
 		summary.MessagesFound, summary.MessagesAdded)
-	fmt.Fprintf(syncTextOutput(), "  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
+	_, _ = fmt.Fprintf(syncTextOutput(), "  Downloaded:    %.2f MB\n", float64(summary.BytesDownloaded)/(1024*1024))
 	if summary.Errors > 0 {
-		fmt.Fprintf(syncTextOutput(), "  Errors:        %d\n", summary.Errors)
+		_, _ = fmt.Fprintf(syncTextOutput(), "  Errors:        %d\n", summary.Errors)
 	}
 
 	elapsed := time.Since(startTime)

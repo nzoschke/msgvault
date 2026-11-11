@@ -1,10 +1,11 @@
 package api
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCLISyncOperationParser(t *testing.T) {
@@ -21,7 +22,7 @@ func TestCLISyncOperationParser(t *testing.T) {
 		{"incremental", "email=a&operation_id=a", false, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req, err := parseCLISyncRequest(httptest.NewRequest("POST", "/?"+tc.query, nil), tc.full)
+			req, err := parseCLISyncRequest(httptest.NewRequestWithContext(t.Context(), "POST", "/?"+tc.query, nil), tc.full)
 			assert.Equal(t, tc.valid, err == nil)
 			if tc.valid {
 				assert.NotEmpty(t, req.OperationID)
@@ -32,21 +33,24 @@ func TestCLISyncOperationParser(t *testing.T) {
 func TestCLISyncOperationReservedBeforeExecution(t *testing.T) {
 	for _, selector := range []string{"email=archive%40example.com", "source_id=42"} {
 		t.Run(selector, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			st := newImportJobTestStore()
 			close(st.release)
 			server := &Server{store: st}
 			response := httptest.NewRecorder()
-			server.handleCLISyncFull(response, httptest.NewRequest("POST", "/?"+selector+"&operation_id=attempt-1", nil))
-			require.Equal(t, 200, response.Code)
+			server.handleCLISyncFull(response, httptest.NewRequestWithContext(t.Context(), "POST", "/?"+selector+"&operation_id=attempt-1", nil))
+			requirements.Equal(200, response.Code)
 			req := <-st.entered
-			assert.Equal(t, "attempt-1", req.OperationID)
-			assert.Equal(t, int64(42), req.SourceID)
-			assert.True(t, req.SourceIDSet)
+			assertions.Equal("attempt-1", req.OperationID)
+			assertions.Equal(int64(42), req.SourceID)
+			assertions.True(req.SourceIDSet)
 			op, err := st.GetSyncOperation("attempt-1")
-			require.NoError(t, err)
-			assert.Equal(t, "done", op.Status)
-			require.Len(t, op.Runs, 1)
-			assert.Equal(t, int64(100), op.Runs[0].ID)
+			requirements.NoError(err)
+			assertions.Equal("done", op.Status)
+			requirements.Len(op.Runs, 1)
+			assertions.Equal(int64(100), op.Runs[0].ID)
 		})
 	}
 }

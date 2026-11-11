@@ -1,7 +1,7 @@
 package batchmessageimport
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"regexp"
@@ -26,7 +26,7 @@ type ImportSource struct {
 }
 
 type ImportMessage struct {
-	OriginalMessageID    int64          `json:"original_message_id,omitempty" minimum:"1"`
+	OriginalMessageID    int64          `json:"original_message_id,omitempty,omitzero" minimum:"1"`
 	SourceMessageID      string         `json:"source_message_id" minLength:"1" maxLength:"512"`
 	SourceConversationID string         `json:"source_conversation_id" minLength:"1" maxLength:"512"`
 	Subject              string         `json:"subject" minLength:"1" maxLength:"4096"`

@@ -24,6 +24,9 @@ func TestInitialBackfill(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt._name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			env := newTestEnv(t)
 			seedPagedMessages(env, 8)
 			source := env.CreateSource(t)
@@ -31,44 +34,44 @@ func TestInitialBackfill(t *testing.T) {
 			opts := DefaultOptions()
 			opts.InitialBackfill = true
 			opts.Query = tt.query
-			for i := 0; i < tt.interruptions; i++ {
+			for i := range tt.interruptions {
 				env.Mock.Profile.HistoryID = uint64(1000 + i)
 				_, err := New(&cancelOnSecondListAPI{MockAPI: env.Mock}, env.Store, opts).Full(env.Context, testEmail)
-				require.ErrorIs(t, err, context.Canceled)
+				requirements.ErrorIs(err, context.Canceled)
 				run, err := env.Store.GetLatestCheckpointedSync(source.ID)
-				require.NoError(t, err)
-				assert.Equal(t, "1000", run.CursorAfter.String)
+				requirements.NoError(err)
+				assertions.Equal("1000", run.CursorAfter.String)
 				refreshed, err := env.Store.GetSourceByID(source.ID)
-				require.NoError(t, err)
-				assert.Empty(t, refreshed.SyncCursor.String)
+				requirements.NoError(err)
+				assertions.Empty(refreshed.SyncCursor.String)
 			}
 			if tt.fail {
 				env.Mock.GetMessageError["msg1"] = errors.New("fetch unavailable")
 				_, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-				require.ErrorContains(t, err, "unresolved message errors")
+				requirements.ErrorContains(err, "unresolved message errors")
 				refreshed, err := env.Store.GetSourceByID(source.ID)
-				require.NoError(t, err)
-				assert.Empty(t, refreshed.SyncCursor.String)
+				requirements.NoError(err)
+				assertions.Empty(refreshed.SyncCursor.String)
 				delete(env.Mock.GetMessageError, "msg1")
 			}
 			if tt.interruptions > 0 {
 				env.Mock.Profile.HistoryID = 2000
 			}
 			summary, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-			require.NoError(t, err)
-			assert.Zero(t, summary.Errors)
-			assert.Equal(t, uint64(1000), summary.FinalHistoryID)
+			requirements.NoError(err)
+			assertions.Zero(summary.Errors)
+			assertions.Equal(uint64(1000), summary.FinalHistoryID)
 			refreshed, err := env.Store.GetSourceByID(source.ID)
-			require.NoError(t, err)
-			assert.Equal(t, "1000", refreshed.SyncCursor.String)
+			requirements.NoError(err)
+			assertions.Equal("1000", refreshed.SyncCursor.String)
 			env.Mock.AddMessage("new-message", testMIME(), []string{"INBOX"})
 			env.SetHistory(2001, gmail.HistoryRecord{ID: 2001, MessagesAdded: []gmail.HistoryMessage{{Message: gmail.MessageID{ID: "new-message", ThreadID: "new-message"}}}})
 			incremental, err := New(env.Mock, env.Store, nil).Incremental(env.Context, refreshed)
-			require.NoError(t, err)
-			assert.Equal(t, int64(1), incremental.MessagesAdded)
+			requirements.NoError(err)
+			assertions.Equal(int64(1), incremental.MessagesAdded)
 			refreshed, err = env.Store.GetSourceByID(source.ID)
-			require.NoError(t, err)
-			assert.Equal(t, "2001", refreshed.SyncCursor.String)
+			requirements.NoError(err)
+			assertions.Equal("2001", refreshed.SyncCursor.String)
 		})
 	}
 }
@@ -84,6 +87,9 @@ func TestInitialBackfillRejectsExistingCursorAndLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt._name, func(t *testing.T) {
+			assertions := assert.New(t)
+			requirements := require.New(t)
+
 			env := newTestEnv(t)
 			source := env.CreateSourceWithHistory(t, tt.cursor)
 			opts := DefaultOptions()
@@ -91,11 +97,11 @@ func TestInitialBackfillRejectsExistingCursorAndLimit(t *testing.T) {
 			opts.Limit = tt.limit
 			opts.Query = "after:2025-09-23"
 			_, err := New(env.Mock, env.Store, opts).Full(env.Context, testEmail)
-			require.ErrorContains(t, err, "initial backfill requires")
+			requirements.ErrorContains(err, "initial backfill requires")
 			refreshed, err := env.Store.GetSourceByID(source.ID)
-			require.NoError(t, err)
-			assert.Equal(t, tt.cursor, refreshed.SyncCursor.String)
-			assert.Zero(t, env.Mock.ListMessagesCalls)
+			requirements.NoError(err)
+			assertions.Equal(tt.cursor, refreshed.SyncCursor.String)
+			assertions.Zero(env.Mock.ListMessagesCalls)
 		})
 	}
 }
