@@ -25,6 +25,13 @@ func newAddO365Cmd() *cobra.Command {
 	cmd := newAddO365LocalCmd()
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if !isDaemonCLISubprocess() {
+			if o365Graph && externalMSMail(invocationFromCommand(cmd)) != nil {
+				// The external provider holds the credentials: no sign-in.
+				if err := checkExternalO365Flags(cmd); err != nil {
+					return err
+				}
+				return runDaemonCLICommandHTTPFromCobra(cmd, args)
+			}
 			if err := preflightAddO365Authorize(cmd, args[0]); err != nil {
 				return err
 			}
@@ -78,7 +85,10 @@ Requires a [microsoft] section in config.toml with your Azure AD app's client_id
 See the docs for Azure AD app registration setup.
 
 With --graph, the account syncs through the Microsoft Graph mail API instead
-of IMAP. Use it when IMAP is turned off for the mailbox. It needs the Mail.Read
+of IMAP. Use it when IMAP is turned off for the mailbox. With
+[microsoft.external] configured (msgvault setup external-msmail), --graph
+registers the account through the external credential provider: there is no
+sign-in and no [microsoft] client_id is needed. It needs the Mail.Read
 permission on the app registration. The first delete-staged for the account
 asks for Mail.ReadWrite, which the app registration must also list. A Graph
 account can request it during sign-in with --mail-write for category editing.
@@ -121,6 +131,9 @@ func runAddO365Local(cmd *cobra.Command, args []string) error {
 	logger := state.logger
 	email := args[0]
 
+	if o365Graph && cfg.Microsoft.External != nil {
+		return runAddO365GraphExternal(cmd, email, state)
+	}
 	if err := requireMicrosoftOAuthConfig(cfg); err != nil {
 		return err
 	}
@@ -326,6 +339,65 @@ func runAddO365GraphLocal(cmd *cobra.Command, email string, mailWrite bool) erro
 	fmt.Println()
 	fmt.Println("You can now run:")
 	oauth.PrintHeadlessCommand(os.Stdout, "msgvault", "sync", "--", email)
+	return nil
+}
+
+// checkExternalO365Flags rejects sign-in flags, which do not apply when an
+// external provider holds the credentials.
+func checkExternalO365Flags(cmd *cobra.Command) error {
+	for _, flag := range []string{"headless", "tenant", "sign-in", "mail-write"} {
+		if cmd.Flags().Changed(flag) {
+			return usageErr(cmd, fmt.Errorf("--%s is unavailable with an external credential provider; access is managed by the provider", flag))
+		}
+	}
+	return nil
+}
+
+// runAddO365GraphExternal registers an msmail account whose credentials an
+// external provider holds. It reads the Inbox folder through the provider to
+// check access, then creates the source. It does not sync.
+func runAddO365GraphExternal(cmd *cobra.Command, email string, state *invocation) error {
+	if err := checkExternalO365Flags(cmd); err != nil {
+		return err
+	}
+	client, err := msmailReadClient(cmd.Context(), email, state)
+	if err != nil {
+		return err
+	}
+	if _, err := client.WellKnownFolderID(cmd.Context(), "inbox"); err != nil {
+		return fmt.Errorf("verify external account: %w", err)
+	}
+	s, cleanup, err := openWritableStoreAndInitForIngestInvocation(cmd.Context(), state)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	// An archive imported as Outlook EML keeps those messages under their
+	// own keys; a second, native source would archive every message twice.
+	if legacy, err := s.GetSourceByTypeAndIdentifier(cmd.Context(), sourceTypeOutlookImport, email); err != nil && !errors.Is(err, store.ErrSourceNotFound) {
+		return fmt.Errorf("look up existing source: %w", err)
+	} else if err == nil {
+		return fmt.Errorf("account %s has an Outlook import (source %d); migrate the existing archive before adding a native source", email, legacy.ID)
+	}
+	source, err := s.GetOrCreateSource(sourceTypeMSMail, email)
+	if err != nil {
+		return fmt.Errorf("create source: %w", err)
+	}
+	if err := updateSourceDisplayNameForRegistration(s, source.ID, email, state.logger); err != nil {
+		return fmt.Errorf("set display name: %w", err)
+	}
+	if err := setDefaultIdentityOptOut(cmd.Context(), cmd, s, source, noDefaultIdentityAddO365); err != nil {
+		return err
+	}
+	if !noDefaultIdentityAddO365 {
+		confirmDefaultIdentity(cmd.Context(), cmd.OutOrStdout(), s, source.ID, email, email, "account-identifier", state.logger)
+	}
+	if err := runPostSourceCreateMigrationsForInvocation(cmd.Context(), s, state); err != nil {
+		return fmt.Errorf("post-source-create migrations: %w", err)
+	}
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Account %s registered for Graph mail with external credentials (source %d). Run msgvault sync %s to back up mail.\n", email, source.ID, email); err != nil {
+		return fmt.Errorf("write result: %w", err)
+	}
 	return nil
 }
 

@@ -5,11 +5,15 @@ import "go.kenn.io/msgvault/internal/msmail"
 // Source-type identifiers stored in sources.source_type and matched against
 // when dispatching sync/import logic per account kind.
 const (
-	sourceTypeGmail          = "gmail"
-	sourceTypeIMAP           = "imap"
-	sourceTypeMbox           = "mbox"
-	sourceTypeTeams          = "teams"
-	sourceTypeMSMail         = msmail.SourceType
+	sourceTypeGmail  = "gmail"
+	sourceTypeIMAP   = "imap"
+	sourceTypeMbox   = "mbox"
+	sourceTypeTeams  = "teams"
+	sourceTypeMSMail = msmail.SourceType
+	// sourceTypeOutlookImport is the source type of Outlook mail imported as
+	// EML files (import-eml --source-type outlook). migrate-outlook converts
+	// such a source to msmail.
+	sourceTypeOutlookImport  = "outlook"
 	sourceTypeCalendar       = "gcal"
 	sourceTypeBeeper         = "beeper"
 	sourceTypeMatrix         = "matrix"

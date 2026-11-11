@@ -2831,3 +2831,31 @@ apply its own shared quota limits.
 
 See [external Gmail commands](cli-reference.md#external-gmail-credentials) for
 initial backup, incremental sync, and cursor-preserving backfill examples.
+
+## External Microsoft mail credentials
+
+Use `msgvault setup external-msmail --endpoint https://proxy.example.test/v1
+--credential-socket /path/to/credentials.sock` or configure:
+
+```toml
+[microsoft.external]
+endpoint = "https://proxy.example.test/v1"
+credential_socket = "/path/to/credentials.sock"
+```
+
+`add-o365 ACCOUNT --graph` registers an account without Microsoft OAuth setup.
+The protected Unix socket supplies a proxy bearer for `provider=outlook` and the
+requested account. Microsoft tokens stay at the proxy. Restart an existing daemon
+when changing these settings. IMAP and other Microsoft connectors keep their
+normal authentication.
+
+Only GET requests under `https://graph.microsoft.com/v1.0/me/` are forwarded to
+`<endpoint>/me/`, with the original query and an `account` parameter. Redirects
+are rejected. A proxy-originated 401 refreshes the bearer once; a relayed Graph
+401 does not. Credential failures and refused requests are not retried.
+
+Native sync stores folders and categories using upstream's `Category: <name>`
+labels and `msmail-category:` identities. Apply categories through the credential
+provider's separate write API, then sync to observe the changes. Native tag reads
+and previews work through the proxy; tag writes and remote deletion are refused.
+No tokens are saved in this configuration.

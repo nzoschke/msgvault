@@ -5947,3 +5947,23 @@ Repeating the same operation ID and filters returns the existing job; changing
 filters or the source returns a conflict. A failed job remains failed: supply a
 new operation ID to start another attempt. Daemon restarts mark unfinished jobs
 failed. These commands use `POST /api/v1/imports` and `GET /api/v1/imports/{job_id}`.
+
+## External Microsoft mail credentials
+
+```sh
+msgvault setup external-msmail --endpoint https://proxy.example.test/v1 \
+  --credential-socket /path/to/credentials.sock
+msgvault add-o365 you@example.com --graph
+msgvault sync --source-id SOURCE_ID --json
+```
+
+The external provider authorizes each mailbox without a local Microsoft sign-in.
+The initial sync downloads the mailbox; subsequent syncs use folder delta cursors
+and observe category changes. JSON includes the source and sync-run IDs, added
+and updated message counts, and folder, move, deletion and error counts. Gmail-only
+history and acquisition counters are not populated for Microsoft mail.
+
+An existing Outlook EML import must be migrated before registering its native
+source, to avoid duplicating the archive. OAuth flags, including `--mail-write`,
+are unavailable with external credentials. See
+[external Microsoft mail configuration](configuration.md#external-microsoft-mail-credentials).
