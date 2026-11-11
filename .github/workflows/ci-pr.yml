@@ -1,6 +1,6 @@
 name: CI
 
-# The PR dispatcher always calls the main-pinned workflow.
+# Use this fork's workflow so its runner and build settings are exercised.
 on:
   pull_request:
   merge_group:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   run:
     cache-mode: read
-    uses: kenn-io/msgvault/.github/workflows/ci.yml@main
+    uses: ./.github/workflows/ci.yml
 
   released-commands:
     runs-on: ubuntu-latest
@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: kenn-io/actions/release-commands@main
         with:
+          # These documents and installers describe the upstream release.
+          repository: kenn-io/msgvault
           files: |
             README.md
             scripts/install.sh
@@ -35,7 +37,7 @@ jobs:
     name: CI gate
     needs: [run, released-commands]
     if: always()
-    runs-on: namespace-profile-linux-1cpu
+    runs-on: ubuntu-26.04
     steps:
       - name: Check CI result
         if: needs.run.result != 'success' || needs.released-commands.result != 'success'

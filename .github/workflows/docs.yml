@@ -36,7 +36,14 @@ jobs:
         working-directory: docs
         run: kit-retry 3 5 uv sync --frozen --no-dev
 
+      - name: Fetch upstream documentation assets
+        run: |
+          kit-retry 3 5 git fetch --depth=1 https://github.com/kenn-io/msgvault.git \
+            refs/heads/docs-assets:refs/heads/docs-assets \
+            refs/heads/docs-generated-assets:refs/heads/docs-generated-assets
+
       - name: Check documentation
         env:
           DOWNLOAD_RETRY: kit-retry 3 5
+          MSGVAULT_DOCS_USE_LOCAL_ASSET_BRANCHES: "true"
         run: make docs-check
