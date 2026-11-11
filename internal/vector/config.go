@@ -176,7 +176,7 @@ func (m MultimodalConfig) ImageQueriesEnabled() bool {
 // EmbeddingsConfig configures the external embedding endpoint used to convert
 // message text into vectors.
 type EmbeddingsConfig struct {
-	LocalOnly bool `toml:"local_only"`
+	LocalOnly                bool               `toml:"local_only"`
 	AuthorizationEnv         string             `toml:"authorization_env"`
 	AuthorizationEndpointEnv string             `toml:"authorization_endpoint_env"`
 	APIFormat                EmbeddingAPIFormat `toml:"api_format"`
@@ -228,7 +228,7 @@ func (e EmbeddingsConfig) IdentityDestination() string {
 // policy under their own enablement and consent controls.
 func (e EmbeddingsConfig) Validate() error {
 	if e.AuthorizationEnv != "" || e.AuthorizationEndpointEnv != "" {
-		if !environmentVariableName.MatchString(e.AuthorizationEnv) || !environmentVariableName.MatchString(e.AuthorizationEndpointEnv) {
+		if !envutil.ValidName(e.AuthorizationEnv) || !envutil.ValidName(e.AuthorizationEndpointEnv) {
 			return errors.New("vector.embeddings: authorization_env and authorization_endpoint_env must both be valid environment variable names")
 		}
 		if e.EffectiveAPIFormat() != APIFormatOpenAI || e.APIKeyEnv != "" {
