@@ -21,7 +21,7 @@ on:
 jobs:
   changes:
     if: ${{ github.event_name == 'pull_request' }}
-    runs-on: namespace-profile-linux-1cpu
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       pull-requests: read
