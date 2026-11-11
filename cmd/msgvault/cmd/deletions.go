@@ -858,6 +858,9 @@ func deleteStagedScopeEscalationForSource(ctx context.Context,
 // msmailScopeEscalation reports whether a Graph mail token lacks
 // Mail.ReadWrite. Trash and permanent delete need the same scope.
 func msmailScopeEscalation(account string, state *invocation) (deleteStagedScopeEscalation, error) {
+	if externalMSMail(state) != nil {
+		return deleteStagedScopeEscalation{}, errors.New("remote deletion is unavailable for Microsoft Graph mail with an external credential provider; the provider grants read access only")
+	}
 	if state == nil || state.cfg == nil || state.logger == nil {
 		return deleteStagedScopeEscalation{}, errors.New("configuration is unavailable")
 	}

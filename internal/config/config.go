@@ -886,6 +886,17 @@ type MicrosoftConfig struct {
 	ClientID    string `toml:"client_id"`
 	TenantID    string `toml:"tenant_id"`
 	RedirectURI string `toml:"redirect_uri"`
+	// External delegates Graph mail authentication for msmail sources to a
+	// local credential provider. When set, msmail never uses local tokens.
+	External *ExternalMicrosoftConfig `toml:"external,omitempty"`
+}
+
+// ExternalMicrosoftConfig delegates Microsoft Graph mail authentication to a
+// local credential provider. The provider resolves and authorizes each
+// requested account. No tokens are saved here.
+type ExternalMicrosoftConfig struct {
+	Endpoint         string `toml:"endpoint"`
+	CredentialSocket string `toml:"credential_socket"`
 }
 
 // EffectiveRedirectURI returns the redirect URI, defaulting to the
@@ -1211,6 +1222,9 @@ func decodeConfig(cfg *Config, path string, explicit, homeOverride bool, content
 		}
 		if strings.HasPrefix(key.String(), "gmail.external.") {
 			return nil, fmt.Errorf("unknown external Gmail config key %q", key.String())
+		}
+		if strings.HasPrefix(key.String(), "microsoft.external.") {
+			return nil, fmt.Errorf("unknown external Microsoft config key %q", key.String())
 		}
 		if strings.HasPrefix(key.String(), "gmail.drafts.") {
 			cfg.deferDaemonError(fmt.Errorf("unknown Gmail draft config key %q", key.String()))

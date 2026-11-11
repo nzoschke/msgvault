@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"go.kenn.io/msgvault/internal/config"
 	"go.kenn.io/msgvault/internal/microsoft"
 	"go.kenn.io/msgvault/internal/msmail"
 	"go.kenn.io/msgvault/internal/store"
@@ -39,15 +40,44 @@ func newGraphMailWriteManager(state *invocation) *microsoft.GraphManager {
 	)
 }
 
-// runMSMailSync syncs one Graph mail account. The first run downloads every
-// folder; later runs fetch only the changes.
-func runMSMailSync(ctx context.Context, s *store.Store, email string, progress func(string), state *invocation) (*msmail.Summary, error) {
-	cfg := state.cfg
+// externalMSMail returns the external Graph mail configuration, or nil when
+// msmail uses local Microsoft OAuth tokens.
+func externalMSMail(state *invocation) *config.ExternalMicrosoftConfig {
+	if state == nil || state.cfg == nil {
+		return nil
+	}
+	return state.cfg.Microsoft.External
+}
+
+// msmailReadClient returns the Graph mail client for sync: the external
+// read-only proxy when [microsoft.external] is set, local tokens otherwise.
+func msmailReadClient(ctx context.Context, email string, state *invocation) (*msmail.Client, error) {
+	if external := externalMSMail(state); external != nil {
+		return msmail.NewExternalClient(msmail.ExternalIn{
+			Account: email, Endpoint: external.Endpoint, CredentialSocket: external.CredentialSocket, QPS: msmailQPS,
+		})
+	}
 	tokenFn, err := newGraphMailManager(state).TokenSource(ctx, email)
 	if err != nil {
 		return nil, err
 	}
-	client := msmail.NewClient(msmail.GraphBaseURL, tokenFn, msmailQPS)
+	return msmail.NewClient(msmail.GraphBaseURL, tokenFn, msmailQPS), nil
+}
+
+// msmailReady reports whether an msmail account can sync: the external
+// provider is configured, or a local token exists.
+func msmailReady(email string, state *invocation) bool {
+	return externalMSMail(state) != nil || newGraphMailManager(state).HasToken(email)
+}
+
+// runMSMailSync syncs one Graph mail account. The first run downloads every
+// folder; later runs fetch only the changes.
+func runMSMailSync(ctx context.Context, s *store.Store, email string, progress func(string), state *invocation) (*msmail.Summary, error) {
+	cfg := state.cfg
+	client, err := msmailReadClient(ctx, email, state)
+	if err != nil {
+		return nil, err
+	}
 	return msmail.Import(ctx, s, client, msmail.Options{
 		Email:          email,
 		AttachmentsDir: cfg.AttachmentsDir(),
