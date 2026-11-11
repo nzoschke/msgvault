@@ -65,6 +65,11 @@ var ErrPreconditionFailed = errors.New("graph precondition failed")
 // error. The caller must restart the delta walk without a token.
 var ErrGone = errors.New("graph delta token expired")
 
+// ErrNotRetryable marks a transport failure that a repeat cannot fix, for
+// example a request that a restricted transport refuses to send. The client
+// returns it at once.
+var ErrNotRetryable = errors.New("graph request not retryable")
+
 // ErrNotSent marks a request that failed before it was sent, for example
 // because the rate limiter's wait would outlast the deadline.
 var ErrNotSent = errors.New("graph request not sent")
@@ -101,6 +106,16 @@ func NewClient(baseURL string, token TokenFunc, qps float64) *Client {
 		token:   token,
 		http:    &http.Client{Timeout: 60 * time.Second},
 		limiter: rate.NewLimiter(rate.Limit(qps), 1),
+	}
+}
+
+// UseTransport sends every request through rt and never follows redirects.
+// The external mail transport uses it to rewrite and authorize requests.
+func (c *Client) UseTransport(rt http.RoundTripper) {
+	c.http = &http.Client{
+		Timeout:       c.http.Timeout,
+		Transport:     rt,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 }
 
@@ -184,6 +199,9 @@ func (c *Client) do(ctx context.Context, method, rawURL string, reqBody []byte, 
 				return nil, err
 			}
 			if _, ok := errors.AsType[*tls.CertificateVerificationError](err); ok {
+				return nil, err
+			}
+			if errors.Is(err, ErrNotRetryable) {
 				return nil, err
 			}
 			if once {

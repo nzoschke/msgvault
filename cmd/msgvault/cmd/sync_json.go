@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"go.kenn.io/msgvault/internal/gmail"
+	"go.kenn.io/msgvault/internal/msmail"
 	"go.kenn.io/msgvault/internal/store"
 )
 
@@ -23,6 +24,7 @@ type syncJSONProgress struct {
 type syncJSONResult struct {
 	Account         string `json:"account"`
 	SourceID        int64  `json:"source_id"`
+	SourceType      string `json:"source_type,omitempty"`
 	BytesDownloaded int64  `json:"bytes_downloaded"`
 	Errors          int64  `json:"errors"`
 	FinalHistoryID  uint64 `json:"final_history_id"`
@@ -31,6 +33,11 @@ type syncJSONResult struct {
 	MessagesSkipped int64  `json:"messages_skipped"`
 	MessagesUpdated int64  `json:"messages_updated"`
 	SyncRunID       int64  `json:"sync_run_id"`
+
+	// Microsoft Graph mail only.
+	Folders         *int64 `json:"folders,omitempty"`
+	MessagesMoved   *int64 `json:"messages_moved,omitempty"`
+	MessagesDeleted *int64 `json:"messages_deleted,omitempty"`
 }
 
 type syncJSONProgressEvent struct {
@@ -74,6 +81,17 @@ func syncProgress(state *invocation, fallback gmail.SyncProgress) gmail.SyncProg
 func recordSyncJSON(s *gmail.SyncSummary, source *store.Source) {
 	syncResults = append(syncResults, syncJSONResult{Account: source.Identifier, SourceID: source.ID, BytesDownloaded: s.BytesDownloaded, Errors: s.Errors, FinalHistoryID: s.FinalHistoryID, MessagesAdded: s.MessagesAdded, MessagesFound: s.MessagesFound, MessagesSkipped: s.MessagesSkipped, MessagesUpdated: s.MessagesUpdated, SyncRunID: s.SyncRunID})
 }
+
+// recordMSMailSyncJSON reports the counters upstream's Graph sync provides.
+func recordMSMailSyncJSON(s *msmail.Summary, source *store.Source) {
+	n := func(v int) *int64 { x := int64(v); return &x }
+	syncResults = append(syncResults, syncJSONResult{
+		Account: source.Identifier, SourceID: source.ID, SourceType: source.SourceType, SyncRunID: s.SyncRunID,
+		Errors: int64(s.Errors), MessagesAdded: int64(s.Added), MessagesUpdated: int64(s.Updated),
+		Folders: n(s.Folders), MessagesMoved: n(s.Moved), MessagesDeleted: n(s.Deleted),
+	})
+}
+
 func finishSyncJSON(err error) error {
 	for _, result := range syncResults {
 		err = errors.Join(err, json.NewEncoder(os.Stdout).Encode(result))

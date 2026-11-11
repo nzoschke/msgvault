@@ -19,14 +19,18 @@ const GraphBaseURL = msgraph.GraphBaseURL
 // Client adds the mail endpoints to the shared Graph transport.
 type Client struct {
 	*msgraph.Client
+	external bool
 }
+
+// External reports whether the client reads through a read-only proxy.
+func (c *Client) External() bool { return c.external }
 
 // NewClient creates a mail Client. Every request asks for immutable IDs, so a
 // message keeps its ID when it moves between folders, and for 1,000-item pages.
 func NewClient(baseURL string, token msgraph.TokenFunc, qps float64) *Client {
 	c := msgraph.NewClient(baseURL, token, qps)
 	c.Headers = map[string]string{"Prefer": `IdType="ImmutableId", odata.maxpagesize=1000`}
-	return &Client{c}
+	return &Client{Client: c}
 }
 
 // Folder is a mail folder. Path joins the display names from the top of the

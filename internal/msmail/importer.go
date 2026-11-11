@@ -61,14 +61,15 @@ type Options struct {
 
 // Summary reports what one sync did.
 type Summary struct {
-	SourceID int64
-	Folders  int
-	Added    int
-	Updated  int
-	Moved    int
-	Deleted  int
-	Errors   int
-	Duration time.Duration
+	SyncRunID int64
+	SourceID  int64
+	Folders   int
+	Added     int
+	Updated   int
+	Moved     int
+	Deleted   int
+	Errors    int
+	Duration  time.Duration
 }
 
 // Import syncs every folder of the mailbox. A folder with no saved cursor is
@@ -97,6 +98,7 @@ func Import(ctx context.Context, st *store.Store, c *Client, opts Options, log *
 	if err != nil {
 		return nil, err
 	}
+	sum.SyncRunID = syncID
 	st = st.ScopedToSync(src.ID, syncID)
 	checkpoint := func() *store.Checkpoint {
 		blob, _ := json.Marshal(cursors, json.Deterministic(true))

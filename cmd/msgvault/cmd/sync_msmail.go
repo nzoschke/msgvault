@@ -6,6 +6,7 @@ import (
 	"io"
 	"time"
 
+	"go.kenn.io/msgvault/internal/config"
 	"go.kenn.io/msgvault/internal/microsoft"
 	"go.kenn.io/msgvault/internal/msmail"
 	"go.kenn.io/msgvault/internal/store"
@@ -31,20 +32,56 @@ func newGraphMailWriteManager(state *invocation, src *store.Source) (*microsoft.
 	return microsoft.NewGraphMailWriteManager(app.ClientID, app.EffectiveTenantID(), app.EffectiveRedirectURI(), dir, state.logger), nil
 }
 
-// runMSMailSync syncs one Graph mail account. The first run downloads every
-// folder; later runs fetch only the changes.
-func runMSMailSync(ctx context.Context, s *store.Store, src *store.Source, progress func(string), state *invocation) (*msmail.Summary, error) {
-	cfg := state.cfg
+// externalMSMail returns the external Graph mail configuration, or nil when
+// msmail uses local Microsoft OAuth tokens.
+func externalMSMail(state *invocation) *config.ExternalMicrosoftConfig {
+	if state == nil || state.cfg == nil {
+		return nil
+	}
+	return state.cfg.Microsoft.External
+}
+
+// msmailReadClient returns the Graph mail client for sync: the external
+// read-only proxy when [microsoft.external] is set, local tokens otherwise.
+func msmailReadClient(ctx context.Context, src *store.Source, state *invocation) (*msmail.Client, error) {
+	if external := externalMSMail(state); external != nil {
+		return msmail.NewExternalClient(msmail.ExternalIn{
+			Account: src.Identifier, Endpoint: external.Endpoint, CredentialSocket: external.CredentialSocket, QPS: msmailQPS,
+		})
+	}
 	mgr, err := newGraphMailManager(state, src)
 	if err != nil {
 		return nil, err
 	}
-	email := src.Identifier
-	tokenFn, err := mgr.TokenSource(ctx, email)
+	tokenFn, err := mgr.TokenSource(ctx, src.Identifier)
 	if err != nil {
 		return nil, err
 	}
-	client := msmail.NewClient(msmail.GraphBaseURL, tokenFn, msmailQPS)
+	return msmail.NewClient(msmail.GraphBaseURL, tokenFn, msmailQPS), nil
+}
+
+// msmailReady reports whether an msmail account can sync: the external
+// provider is configured, or a local token exists.
+func msmailReady(src *store.Source, state *invocation) (bool, error) {
+	if externalMSMail(state) != nil {
+		return true, nil
+	}
+	mgr, err := newGraphMailManager(state, src)
+	if err != nil {
+		return false, err
+	}
+	return mgr.HasToken(src.Identifier), nil
+}
+
+// runMSMailSync syncs one Graph mail account. The first run downloads every
+// folder; later runs fetch only the changes.
+func runMSMailSync(ctx context.Context, s *store.Store, src *store.Source, progress func(string), state *invocation) (*msmail.Summary, error) {
+	cfg := state.cfg
+	email := src.Identifier
+	client, err := msmailReadClient(ctx, src, state)
+	if err != nil {
+		return nil, err
+	}
 	return msmail.Import(ctx, s, client, msmail.Options{
 		Email:          email,
 		AttachmentsDir: cfg.AttachmentsDir(),

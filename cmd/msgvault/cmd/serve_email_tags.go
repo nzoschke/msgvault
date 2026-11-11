@@ -91,6 +91,16 @@ func (a *storeAPIAdapter) providerMessageTags(ctx context.Context, source *store
 	if target.Provider == sourceTypeMSMail {
 		write := change != nil && !change.DryRun
 		state := invocationFromContext(ctx)
+		if externalMSMail(state) != nil {
+			if write {
+				return nil, emailtags.Failure("insufficient_scope", "External Microsoft credentials allow mailbox reads only; apply category changes through the credential provider", nil, nil)
+			}
+			client, err := msmailReadClient(ctx, source, state)
+			if err != nil {
+				return nil, err
+			}
+			return client.MessageTags(ctx, target.SourceMessageID, change)
+		}
 		if write {
 			manager, err := newGraphMailWriteManager(state, source)
 			if err != nil {

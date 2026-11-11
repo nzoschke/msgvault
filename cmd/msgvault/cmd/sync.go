@@ -198,12 +198,12 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 				}
 				imapTargets = append(imapTargets, src)
 			case sourceTypeMSMail:
-				mgr, err := newGraphMailManager(state, src)
+				ready, err := msmailReady(src, state)
 				if err != nil {
 					syncErrors = append(syncErrors, fmt.Sprintf("%s: %v", src.Identifier, err))
 					continue
 				}
-				if !mgr.HasToken(src.Identifier) {
+				if !ready {
 					fmt.Fprintf(syncTextOutput(), "Skipping %s (no Microsoft Graph token - run 'add-o365 %s --graph' first)\n", src.Identifier, src.Identifier)
 					continue
 				}
@@ -219,10 +219,6 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 			}
 			return errors.New("no accounts are ready to sync")
 		}
-	}
-
-	if syncJSON && len(msmailTargets) > 0 {
-		return errors.New("--json supports Gmail and IMAP sync; select a Gmail or IMAP account")
 	}
 
 	// Sync IMAP sources via folder-based full sync.
@@ -243,8 +239,17 @@ func runSyncIncrementalLocal(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Fprintf(syncTextOutput(), "Syncing Microsoft Graph mail for %s\n", src.Identifier)
 		sum, err := runMSMailSync(ctx, s, src, func(line string) { fmt.Fprintln(syncTextOutput(), line) }, state)
+		if sum != nil && syncJSON {
+			recordMSMailSyncJSON(sum, src)
+		}
 		if err != nil {
 			syncErrors = append(syncErrors, fmt.Sprintf("%s: %v", src.Identifier, err))
+			continue
+		}
+		if syncJSON {
+			if sum.Errors > 0 {
+				syncErrors = append(syncErrors, fmt.Sprintf("%s: sync has unresolved message errors", src.Identifier))
+			}
 			continue
 		}
 		writeMSMailSyncSummary(os.Stdout, src.Identifier, sum)
