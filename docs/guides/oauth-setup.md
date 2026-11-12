@@ -653,6 +653,13 @@ type `msmail`. Each mail folder becomes a label. The first sync downloads every
 folder. Later syncs fetch only the changes, including moves between folders
 and deletes. The daemon schedules the account like any other.
 
+Observed Graph context is stored with each message under
+`metadata._msgvault_msmail`: its immutable ID, conversation ID when supplied,
+folder ID, draft and Inbox status, receipt time, and current categories. Folder
+moves and category changes update this context alongside native labels, without
+requiring a separate mailbox inventory. Legacy migration metadata remains
+provenance and does not count as an observation of the current mailbox.
+
 To delete messages at the source with `delete-staged`, also add the delegated
 permission `Mail.ReadWrite`. Sync does not use it. The first `delete-staged`
 for the account asks to upgrade the token. See

@@ -47,6 +47,8 @@ type Folder struct {
 // message left the folder: it moved, or it was deleted.
 type DeltaMessage struct {
 	ID               string    `json:"id"`
+	ConversationID   string    `json:"conversationId"`
+	IsDraft          *bool     `json:"isDraft"`
 	ReceivedDateTime time.Time `json:"receivedDateTime"`
 	Categories       *[]string `json:"categories"`
 	Removed          *struct {
@@ -95,7 +97,7 @@ func (c *Client) WellKnownFolderID(ctx context.Context, name string) (string, er
 // DeltaStartURL is the first delta request for a folder with no saved cursor.
 // It returns every message in the folder and ends with a deltaLink.
 func DeltaStartURL(folderID string) string {
-	return "/me/mailFolders/" + url.PathEscape(folderID) + "/messages/delta?$select=receivedDateTime,categories"
+	return "/me/mailFolders/" + url.PathEscape(folderID) + "/messages/delta?$select=receivedDateTime,categories,conversationId,isDraft"
 }
 
 // DeltaPage fetches one page of a delta walk. The page carries a NextLink

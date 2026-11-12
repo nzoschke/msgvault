@@ -28,10 +28,10 @@ const SourceType = "msmail"
 // an interrupted walk starts over. Known messages are not downloaded again.
 const walkPrefix = "walk:"
 
-// categoryDeltaPrefix identifies cursors created with categories in $select.
+// categoryDeltaPrefix identifies cursors selecting categories and mail context.
 // Old opaque cursors cannot gain fields, so their folders rewalk once. The old
 // cursor covers content changes until the replacement walk finishes.
-const categoryDeltaPrefix = "categories-v1:"
+const categoryDeltaPrefix = "mail-state-v2:"
 
 // retryPrefix marks a saved-state key that names a message to download again.
 const retryPrefix = "retry:"
@@ -154,6 +154,9 @@ func Import(ctx context.Context, st *store.Store, c *Client, opts Options, log *
 			link, seen = DeltaStartURL(f.ID), map[string]bool{}
 		case strings.HasPrefix(link, categoryDeltaPrefix):
 			link = strings.TrimPrefix(link, categoryDeltaPrefix)
+		case strings.HasPrefix(link, "categories-v1:"):
+			oldCursor = strings.TrimPrefix(link, "categories-v1:")
+			link, seen = DeltaStartURL(f.ID), map[string]bool{}
 		default:
 			oldCursor = link
 			link, seen = DeltaStartURL(f.ID), map[string]bool{}
@@ -248,6 +251,7 @@ func mergeCursors(dst map[string]string, blob string) {
 }
 
 type syncer struct {
+	inbox string
 	// cursors is the saved state: folder ID -> delta link, and
 	// retryPrefix + message ID -> folder ID for messages to download again.
 	cursors map[string]string
@@ -293,6 +297,8 @@ func (s *syncer) ensureLabels(ctx context.Context, folders []Folder) (map[string
 		}
 		system[id] = role
 		switch name {
+		case "inbox":
+			s.inbox = id
 		case "drafts":
 			s.drafts = id
 		case "deleteditems":
@@ -356,7 +362,7 @@ func (s *syncer) applyPage(ctx context.Context, folderID string, items []DeltaMe
 			todo = append(todo, m)
 			continue
 		}
-		if err := s.setFolder(ctx, id, folderLabel, m.Categories); err != nil {
+		if err := s.setFolder(ctx, id, folderLabel, m.Categories, m); err != nil {
 			return err
 		}
 		if seen == nil || (s.drafts != "" && folderID == s.drafts) {
@@ -380,7 +386,7 @@ func (s *syncer) applyPage(ctx context.Context, folderID string, items []DeltaMe
 // afterStore makes sure that every attachment of a stored MIME has a row. For
 // a refreshed message, it then drops the rows of parts that the new MIME no
 // longer has. If a row is missing, the old rows stay and it returns an error.
-func (s *syncer) afterStore(ctx context.Context, m DeltaMessage, raw []byte) error {
+func (s *syncer) afterStore(ctx context.Context, folderID string, m DeltaMessage, raw []byte) error {
 	msgID := m.archiveID
 	if msgID == 0 {
 		ids, err := s.st.MessageExistsBatchContext(ctx, s.sourceID, []string{m.ID})
@@ -394,6 +400,9 @@ func (s *syncer) afterStore(ctx context.Context, m DeltaMessage, raw []byte) err
 		if _, err := s.st.ReconcileMicrosoftMailLabelsContext(ctx, msgID, nil, m.Categories); err != nil {
 			return fmt.Errorf("save Microsoft categories: %w", err)
 		}
+	}
+	if err := s.saveMailState(ctx, msgID, s.labels[folderID], &m); err != nil {
+		return err
 	}
 	if s.opts.AttachmentsDir == "" {
 		return nil // no attachment rows are written
@@ -553,12 +562,19 @@ func (s *syncer) relocate(ctx context.Context, msgs map[string]int64) error {
 	return nil
 }
 
-func (s *syncer) setFolder(ctx context.Context, messageID, label int64, categories *[]string) error {
+func (s *syncer) setFolder(ctx context.Context, messageID, label int64, categories *[]string, message ...DeltaMessage) error {
 	changed, err := s.st.ReconcileMicrosoftMailLabelsContext(ctx, messageID, &label, categories)
 	if changed {
 		s.sum.Moved++
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	var observed *DeltaMessage
+	if len(message) > 0 {
+		observed = &message[0]
+	}
+	return s.saveMailState(ctx, messageID, label, observed)
 }
 
 type fetched struct {
@@ -654,7 +670,7 @@ func (s *syncer) download(ctx context.Context, folderID string, msgs []DeltaMess
 			continue
 		}
 		delete(s.cursors, retryPrefix+r.msg.ID)
-		if err := s.afterStore(ctx, r.msg, r.raw); err != nil {
+		if err := s.afterStore(ctx, folderID, r.msg, r.raw); err != nil {
 			// A later walk skips stored messages, so incomplete processing needs a retry.
 			s.log.Warn("processing after message storage failed, retrying on the next sync", "id", r.msg.ID, "error", err)
 			s.sum.Errors++
