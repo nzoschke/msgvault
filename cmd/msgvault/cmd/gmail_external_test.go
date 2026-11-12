@@ -4,14 +4,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -19,6 +17,7 @@ import (
 	"go.kenn.io/msgvault/internal/api"
 	"go.kenn.io/msgvault/internal/config"
 	"go.kenn.io/msgvault/internal/store"
+	"go.kenn.io/msgvault/internal/testutil"
 )
 
 func TestStandardExternalFlagValidation(t *testing.T) {
@@ -98,7 +97,6 @@ func TestStandardExternalBackfill(t *testing.T) {
 			requirements := require.New(t)
 
 			markDaemonCLISubprocessForTest(t)
-			t.Chdir(t.TempDir())
 			cfg := config.NewDefaultConfig()
 			cfg.HomeDir = t.TempDir()
 			cfg.Data.DataDir = cfg.HomeDir
@@ -115,14 +113,7 @@ func TestStandardExternalBackfill(t *testing.T) {
 			requirements.NoError(err)
 			originalCursor := source.SyncCursor
 
-			listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
-			requirements.NoError(err)
-			credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "alice@example.com", r.URL.Query().Get("account"))
-				_, _ = io.WriteString(w, `{"access_token":"fixture-token"}`)
-			})}
-			go func() { _ = credentials.Serve(listener) }()
-			t.Cleanup(func() { _ = credentials.Close() })
+			provider := testutil.InboundCredentialCommand(t, "fixture-token")
 			fail := tt.failure
 			var queries []string
 			var historyCalls int
@@ -167,7 +158,7 @@ func TestStandardExternalBackfill(t *testing.T) {
 				cmd.SetContext(withStoreResolverConfig(t, cfg))
 				cmd.SetOut(io.Discard)
 				cmd.SetErr(io.Discard)
-				cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialSocket: "token.sock", IncludeSpamTrash: tt.spam}
+				cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialProvider: config.CredentialProviderConfig{Command: provider[0], Args: provider[1:]}, IncludeSpamTrash: tt.spam}
 				args := []string{"alice@example.com", "--build-cache", "--json"}
 				if tt.query != "" {
 					args = append(args, "--query", tt.query)
@@ -234,41 +225,45 @@ func TestSetupExternalGmail(t *testing.T) {
 
 	cfg := config.NewDefaultConfig()
 	cfg.HomeDir = t.TempDir()
-	requirements.NoError(os.WriteFile(cfg.ConfigFilePath(), []byte("# keep operator settings\n[vector]\nenabled = false\n"), 0600))
+	original := "# keep operator settings\n[vector]\nenabled = false\n\n[gmail.external]\nendpoint = \"https://old.example.test/v1\"\ncredential_socket = \"/run/token.sock\"\n"
+	requirements.NoError(os.WriteFile(cfg.ConfigFilePath(), []byte(original), 0600))
+	_, err := config.Load(cfg.ConfigFilePath(), cfg.HomeDir)
+	requirements.NoError(err, "a config with the retired socket key loads so setup can replace it")
+	provider := testutil.InboundCredentialCommand(t, "fixture-token")
 	cmd := newSetupExternalGmailCmd()
 	cmd.SetContext(withStoreResolverConfig(t, cfg))
-	cmd.SetArgs([]string{"--endpoint", "https://proxy.example.test/v1", "--credential-socket", filepath.Join(cfg.HomeDir, "token.sock"), "--include-spam-trash"})
+	cmd.SetArgs([]string{"--endpoint", "https://proxy.example.test/v1/", "--credential-command", provider[0], "--credential-arg", "--account-flag", "--credential-arg", "two words", "--include-spam-trash"})
 	requirements.NoError(cmd.Execute())
 	loaded, err := config.Load(cfg.ConfigFilePath(), cfg.HomeDir)
 	requirements.NoError(err)
 	requirements.NotNil(loaded.Gmail.External)
 	assertions.Equal("https://proxy.example.test/v1", loaded.Gmail.External.Endpoint)
+	assertions.Equal([]string{provider[0], "--account-flag", "two words"}, loaded.Gmail.External.CredentialProvider.Argv())
 	assertions.True(loaded.Gmail.External.IncludeSpamTrash)
 	assertions.False(loaded.Vector.Enabled)
 	data, err := os.ReadFile(cfg.ConfigFilePath())
 	requirements.NoError(err)
 	assertions.Contains(string(data), "# keep operator settings")
-	assertions.NotContains(string(data), "access_token")
+	assertions.NotContains(string(data), "credential_socket")
+	assertions.NotContains(string(data), "fixture-token")
+
+	cmd = newSetupExternalGmailCmd()
+	cmd.SetContext(withStoreResolverConfig(t, cfg))
+	cmd.SetArgs([]string{"--endpoint", "https://proxy.example.test/v1", "--credential-command", filepath.Join(cfg.HomeDir, "missing-helper")})
+	requirements.ErrorContains(cmd.Execute(), "credential provider command")
 }
 
 func TestExternalSharedClientRejectsMismatchedAccount(t *testing.T) {
-	t.Chdir(t.TempDir())
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", "token.sock")
-	require.NoError(t, err)
-	credentials := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, `{"access_token":"fixture-token"}`)
-	})}
-	go func() { _ = credentials.Serve(listener) }()
-	t.Cleanup(func() { _ = credentials.Close() })
+	provider := testutil.InboundCredentialCommand(t, "fixture-token")
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = io.WriteString(w, `{"emailAddress":"other@example.com","historyId":"123"}`)
 	}))
 	defer upstream.Close()
 	cfg := config.NewDefaultConfig()
-	cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialSocket: "token.sock"}
+	cfg.Gmail.External = &config.ExternalGmailConfig{Endpoint: upstream.URL + "/v1", CredentialProvider: config.CredentialProviderConfig{Command: provider[0], Args: provider[1:]}}
 	ctx := withStoreResolverConfig(t, cfg)
 	src := &store.Source{SourceType: "gmail", Identifier: "alice@example.com"}
-	_, err = buildAPIClient(ctx, src, nil, nil)
+	_, err := buildAPIClient(ctx, src, nil, nil)
 	require.ErrorContains(t, err, "profile does not match")
 	_, _, err = newDaemonGmailClient(ctx, src.Identifier, src, nil, invocationFromContext(ctx), nil)
 	require.ErrorContains(t, err, "profile does not match")
