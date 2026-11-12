@@ -27,6 +27,8 @@ func TestSyncMailStateFollowsFoldersAndCategories(t *testing.T) {
 	require.Equal(t, true, got["inInbox"])
 	require.Equal(t, "inbox", got["parentFolderId"])
 	require.Equal(t, []any{"Next"}, got["categories"])
+	_, err = st.DB().ExecContext(t.Context(), st.Rebind(`UPDATE messages SET metadata='null' WHERE source_message_id=?`), "m1")
+	require.NoError(t, err)
 	f.mu.Lock()
 	delete(f.categories, "m1")
 	f.mu.Unlock()
