@@ -2816,15 +2816,21 @@ or add this table to `config.toml`:
 ```toml
 [gmail.external]
 endpoint = "https://proxy.example.test/v1"
-credential_socket = "/path/to/token.sock"
 include_spam_trash = true
+
+[gmail.external.credential_provider]
+command = "/usr/local/bin/example-credential-provider"
+args = ["--profile", "personal"]
 ```
 
 The provider authorizes each requested Gmail account. When configured, standard
 Gmail sync, verification, repair, account registration, and daemon jobs use it
 instead of Google OAuth files. Restart a running daemon after changing these
 settings. Remove the table to return to ordinary OAuth configuration. Never put
-access tokens in this table. Protect the Unix socket and use an absolute path.
+access tokens in this table. Use an absolute `command` path to a helper only the
+daemon's user can modify. A config that still has the retired
+`credential_socket` key loads, but Gmail commands fail until you rerun
+`msgvault setup external-gmail`, which removes it.
 External authentication uses the same `[sync].rate_limit_qps` setting and
 default fetch concurrency as ordinary Gmail authentication. The provider may
 apply its own shared quota limits.
