@@ -717,9 +717,21 @@ type GmailConfig struct {
 // ExternalGmailConfig delegates Gmail authentication to a local credential provider.
 // The provider resolves and authorizes each requested account. No tokens are saved here.
 type ExternalGmailConfig struct {
-	Endpoint         string `toml:"endpoint"`
-	CredentialSocket string `toml:"credential_socket"`
-	IncludeSpamTrash bool   `toml:"include_spam_trash"`
+	Endpoint           string                   `toml:"endpoint"`
+	CredentialProvider CredentialProviderConfig `toml:"credential_provider"`
+	IncludeSpamTrash   bool                     `toml:"include_spam_trash"`
+}
+
+// CredentialProviderConfig names a trusted local helper that speaks the inbound
+// credential provider protocol. It runs without a shell.
+type CredentialProviderConfig struct {
+	Command string   `toml:"command"`
+	Args    []string `toml:"args"`
+}
+
+// Argv returns the helper command followed by its arguments.
+func (c CredentialProviderConfig) Argv() []string {
+	return append([]string{c.Command}, c.Args...)
 }
 
 // GmailDraftSource grants one Gmail source permission to create, edit, or
@@ -1220,7 +1232,8 @@ func decodeConfig(cfg *Config, path string, explicit, homeOverride bool, content
 		if strings.HasPrefix(key.String(), "imap.drafts.") {
 			cfg.deferDaemonError(fmt.Errorf("unknown IMAP draft config key %q", key.String()))
 		}
-		if strings.HasPrefix(key.String(), "gmail.external.") {
+		// setup external-gmail removes the retired socket key, so it must load.
+		if strings.HasPrefix(key.String(), "gmail.external.") && key.String() != "gmail.external.credential_socket" {
 			return nil, fmt.Errorf("unknown external Gmail config key %q", key.String())
 		}
 		if strings.HasPrefix(key.String(), "microsoft.external.") {

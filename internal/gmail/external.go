@@ -1,30 +1,27 @@
 package gmail
 
 import (
-	"context"
-	"encoding/json/v2"
 	"errors"
-	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
+
+	"go.kenn.io/msgvault/pkg/credentialprovider"
 )
 
 type ExternalIn struct {
-	Account          string
-	CredentialSocket string
-	Endpoint         string
-	IncludeSpamTrash bool
+	Account            string
+	CredentialProvider []string
+	Endpoint           string
+	IncludeSpamTrash   bool
 }
 
 type externalTransport struct {
-	account     string
-	credentials *http.Client
-	endpoint    *url.URL
-	transport   http.RoundTripper
+	account   string
+	source    *credentialprovider.InboundSource
+	endpoint  *url.URL
+	transport http.RoundTripper
 }
 
 func NewExternalClient(in ExternalIn, opts ...ClientOption) (*Client, error) {
@@ -36,15 +33,16 @@ func NewExternalClient(in ExternalIn, opts ...ClientOption) (*Client, error) {
 	if endpoint.Scheme != "https" && !localHTTP {
 		return nil, errors.New("external Gmail endpoint requires HTTPS")
 	}
-	if in.Account == "" || in.CredentialSocket == "" {
-		return nil, errors.New("account and credential socket are required")
+	if in.Account == "" || len(in.CredentialProvider) == 0 || in.CredentialProvider[0] == "" {
+		return nil, errors.New("account and credential provider are required")
 	}
-	transport := &externalTransport{
-		account: in.Account, endpoint: endpoint, transport: http.DefaultTransport,
-		credentials: &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, "unix", in.CredentialSocket)
-		}}},
+	source, err := credentialprovider.NewInboundSource(in.CredentialProvider, credentialprovider.InboundScope{
+		Endpoint: in.Endpoint, SourceType: "gmail", Account: in.Account,
+	})
+	if err != nil {
+		return nil, errors.New("invalid external Gmail credential provider scope")
 	}
+	transport := &externalTransport{account: in.Account, source: source, endpoint: endpoint, transport: http.DefaultTransport}
 	client := NewClient(nil, opts...)
 	client.httpClient = &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	client.includeSpamTrash = in.IncludeSpamTrash
@@ -52,43 +50,28 @@ func NewExternalClient(in ExternalIn, opts ...ClientOption) (*Client, error) {
 	return client, nil
 }
 
+// RoundTrip sends a mailbox read to the external endpoint with a bearer from
+// the credential provider. A 401 the endpoint produced itself (no
+// X-Upstream-Status) renews the credential once; a relayed Gmail 401 does not.
 func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if req.Method != http.MethodGet || !strings.HasPrefix(req.URL.String(), baseURL+"/users/me/") {
 		return nil, errors.New("external Gmail client only permits mailbox reads")
 	}
+	target := *t.endpoint
+	target.Path = strings.TrimSuffix(target.Path, "/") + strings.TrimPrefix(req.URL.Path, "/gmail/v1")
+	query := req.URL.Query()
+	query.Set("account", t.account)
+	target.RawQuery = query.Encode()
+	token, err := t.source.Token(req.Context())
+	if err != nil {
+		return nil, err
+	}
 	for attempt := range 2 {
-		values := url.Values{"account": {t.account}}
-		if attempt > 0 {
-			values.Set("refresh", "true")
-		}
-		credentialRequest, err := http.NewRequestWithContext(req.Context(), http.MethodGet, "http://credentials/token?"+values.Encode(), nil)
-		if err != nil {
-			return nil, err
-		}
-		response, err := t.credentials.Do(credentialRequest)
-		if err != nil {
-			return nil, fmt.Errorf("request external credentials: %w", err)
-		}
-		var credential struct {
-			AccessToken string `json:"access_token"`
-		}
-		if response.StatusCode == http.StatusOK {
-			err = json.UnmarshalRead(io.LimitReader(response.Body, 1<<20), &credential)
-		}
-		_ = response.Body.Close()
-		if err != nil || response.StatusCode != http.StatusOK || credential.AccessToken == "" {
-			return nil, fmt.Errorf("external credentials unavailable (status %d)", response.StatusCode)
-		}
 		upstream := req.Clone(req.Context())
-		target := *t.endpoint
-		target.Path = strings.TrimSuffix(target.Path, "/") + strings.TrimPrefix(req.URL.Path, "/gmail/v1")
-		query := req.URL.Query()
-		query.Set("account", t.account)
-		target.RawQuery = query.Encode()
 		upstream.URL = &target
 		upstream.Host = target.Host
-		upstream.Header.Set("Authorization", "Bearer "+credential.AccessToken)
-		response, err = t.transport.RoundTrip(upstream)
+		upstream.Header.Set("Authorization", "Bearer "+token.Bearer)
+		response, err := t.transport.RoundTrip(upstream)
 		if err != nil {
 			return nil, err
 		}
@@ -96,6 +79,9 @@ func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error)
 			return response, nil
 		}
 		_ = response.Body.Close()
+		if token, err = t.source.Renew(req.Context(), token); err != nil {
+			return nil, err
+		}
 	}
 	return nil, errors.New("external credentials rejected")
 }

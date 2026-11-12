@@ -892,7 +892,8 @@ Use the standard Gmail commands with an external credential provider:
 
 ```bash
 msgvault setup external-gmail --endpoint https://proxy.example.test/v1 \
-  --credential-socket /path/to/token.sock --include-spam-trash
+  --credential-command /usr/local/bin/example-credential-provider \
+  --credential-arg --profile --credential-arg personal --include-spam-trash
 # Restart a running daemon after changing the provider.
 msgvault add-account account@example.com
 msgvault sync account@example.com --json
@@ -903,12 +904,15 @@ msgvault verify account@example.com --json
 msgvault repair-message 123
 ```
 
-The provider resolves each account and supplies access tokens in memory through
-`GET /token?account=email`, returning `{"access_token":"..."}`. Authentication
-failures request `refresh=true`. The endpoint must use HTTPS (loopback HTTP is
-allowed for testing). The socket must be protected and accessible to the daemon.
-Configuration contains only the endpoint, socket path, and listing policy.
-See [configuration](configuration.md#external-gmail-credentials).
+msgvault runs the credential provider command without a shell and exchanges
+one JSON document per request using the
+[inbound credential provider protocol](guides/credential-providers.md#read-a-source-through-a-helper).
+Credentials stay in memory. A 401 from the endpoint itself renews the
+credential once; a relayed Gmail 401 does not. The endpoint must use HTTPS
+(loopback HTTP is allowed for testing). `--credential-command` is resolved to
+an absolute path; repeat `--credential-arg` for each argument. Configuration
+contains only the endpoint, provider command, and listing policy. See
+[configuration](configuration.md#external-gmail-credentials).
 
 This provider replaces Gmail OAuth for the archive. `add-account` verifies the
 mailbox and registers it without downloading mail. `sync ACCOUNT` performs an
