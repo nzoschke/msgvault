@@ -64,7 +64,7 @@ func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	target.RawQuery = query.Encode()
 	token, err := t.source.Token(req.Context())
 	if err != nil {
-		return nil, err
+		return nil, classifyCredentialError(err)
 	}
 	for attempt := range 2 {
 		upstream := req.Clone(req.Context())
@@ -80,8 +80,32 @@ func (t *externalTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		}
 		_ = response.Body.Close()
 		if token, err = t.source.Renew(req.Context(), token); err != nil {
-			return nil, err
+			return nil, classifyCredentialError(err)
 		}
 	}
 	return nil, errors.New("external credentials rejected")
+}
+
+// CredentialUnavailableError is a credential provider outcome that retrying
+// the same request cannot change: the account needs sign-in or approval, or the
+// helper and msgvault disagree on the protocol.
+type CredentialUnavailableError struct{ err error }
+
+func (e *CredentialUnavailableError) Error() string {
+	return "external credentials unavailable: " + e.err.Error()
+}
+
+func (e *CredentialUnavailableError) Unwrap() error { return e.err }
+
+func classifyCredentialError(err error) error {
+	if errors.Is(err, credentialprovider.ErrInvalidRequest) || errors.Is(err, credentialprovider.ErrInvalidResponse) {
+		return &CredentialUnavailableError{err: err}
+	}
+	if refusal, ok := errors.AsType[*credentialprovider.RefusalError](err); ok {
+		switch refusal.Status {
+		case credentialprovider.StatusSignInRequired, credentialprovider.StatusApprovalRequired:
+			return &CredentialUnavailableError{err: err}
+		}
+	}
+	return err
 }

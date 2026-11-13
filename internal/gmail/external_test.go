@@ -1,15 +1,19 @@
 package gmail_test
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.kenn.io/msgvault/internal/gmail"
 	"go.kenn.io/msgvault/internal/testutil"
+	"go.kenn.io/msgvault/pkg/credentialprovider"
 )
 
 func TestExternalClient(t *testing.T) {
@@ -66,4 +70,38 @@ func TestExternalClientEndpoint(t *testing.T) {
 	}
 	_, err := gmail.NewExternalClient(gmail.ExternalIn{Account: "alice@example.com", Endpoint: "https://example.com/v1"})
 	require.Error(t, err, "a credential provider is required")
+}
+
+func TestExternalClientStopsOnPermanentRefusal(t *testing.T) {
+	var requests atomic.Int32
+	upstream := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
+	defer upstream.Close()
+	for _, tt := range []struct {
+		status    credentialprovider.Status
+		permanent bool
+	}{
+		{credentialprovider.StatusSignInRequired, true},
+		{credentialprovider.StatusApprovalRequired, true},
+		{credentialprovider.StatusUnavailable, false},
+	} {
+		t.Run(string(tt.status), func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+			client, err := gmail.NewExternalClient(gmail.ExternalIn{
+				Account: "alice@example.com", CredentialProvider: testutil.InboundCredentialCommand(t, string(tt.status)),
+				Endpoint: upstream.URL + "/vault/v1",
+			})
+			require.NoError(err)
+			ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+			defer cancel()
+			_, err = client.ListMessages(ctx, "", "")
+			refusal, ok := errors.AsType[*credentialprovider.RefusalError](err)
+			require.True(ok, "expected a refusal, got %v", err)
+			assert.Equal(tt.status, refusal.Status)
+			_, unavailable := errors.AsType[*gmail.CredentialUnavailableError](err)
+			assert.Equal(tt.permanent, unavailable)
+			assert.Equal(tt.permanent, !errors.Is(err, context.DeadlineExceeded), "only transient refusals spend the retry budget")
+			assert.Zero(requests.Load(), "a refused credential never reaches the endpoint")
+		})
+	}
 }

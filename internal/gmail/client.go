@@ -231,6 +231,9 @@ func (c *Client) requestWithRetryBudget(ctx context.Context, op Operation, metho
 				}
 				return nil, fmt.Errorf("%w: http request: %w", errWriteOutcomeUnknown, err)
 			}
+			if _, ok := errors.AsType[*CredentialUnavailableError](err); ok {
+				return nil, fmt.Errorf("http request: %w", err)
+			}
 			if ctx.Err() != nil {
 				// The budget expired mid-request; report the response that
 				// drove the retries rather than this interrupted attempt.

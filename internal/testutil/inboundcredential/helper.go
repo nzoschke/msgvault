@@ -11,9 +11,17 @@ import (
 	"go.kenn.io/msgvault/pkg/credentialprovider"
 )
 
+var refusals = map[credentialprovider.Status]string{
+	credentialprovider.StatusSignInRequired:   "no_current_sign_in",
+	credentialprovider.StatusApprovalRequired: "account_approval_required",
+	credentialprovider.StatusConflict:         "generation_changed",
+	credentialprovider.StatusUnavailable:      "authority_unavailable",
+}
+
 // Run answers one request. Its arguments are the bearer tokens to issue by
 // generation: the first for authorize, the next for each renew, repeating the
-// last once they run out.
+// last once they run out. A token named after a refusal status, such as
+// sign_in_required, refuses instead.
 func Run() {
 	tokens := os.Args[1:]
 	if len(tokens) == 0 {
@@ -25,6 +33,15 @@ func Run() {
 	}
 	generation := r.ExpectedGeneration + 1
 	token := tokens[min(int(generation), len(tokens))-1]
+	if reason, ok := refusals[credentialprovider.Status(token)]; ok {
+		err = credentialprovider.WriteInboundResponse(os.Stdout, r, credentialprovider.InboundResponse{
+			Version: r.Version, Operation: r.Operation, RequestID: r.RequestID, Status: credentialprovider.Status(token), Reason: reason,
+		})
+		if err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	issued := time.Now().UTC()
 	err = credentialprovider.WriteInboundResponse(os.Stdout, r, credentialprovider.InboundResponse{
 		InboundScope: r.InboundScope, Version: r.Version, Operation: r.Operation, RequestID: r.RequestID,
