@@ -10,7 +10,7 @@ import (
 )
 
 func newImportJobCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "import-job", Short: "Start or inspect a durable historical import job"}
+	cmd := &cobra.Command{Use: "import-job", Short: "Start or inspect a historical import job"}
 	cmd.AddCommand(&cobra.Command{Use: "start", Short: "Start a job from JSON on stdin; return without waiting", Args: cobra.NoArgs, RunE: func(cmd *cobra.Command, _ []string) error {
 		var in generated.ImportJobRequest
 		if err := json.UnmarshalRead(io.LimitReader(cmd.InOrStdin(), (16<<10)+1), &in, json.RejectUnknownMembers(true)); err != nil {

@@ -84,7 +84,7 @@ func newMigrateOutlookCmd() *cobra.Command {
 	var input string
 	command := &cobra.Command{
 		Use:   "migrate-outlook",
-		Short: "Convert an Outlook EML import into a native Microsoft Graph mail source",
+		Short: "Convert an Outlook EML import to Graph mail",
 		Long: `Convert a source of Outlook mail imported as EML files (source type
 "outlook") into a native Microsoft Graph mail source (source type "msmail"),
 from a reviewed JSON mapping on stdin or in --input.

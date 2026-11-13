@@ -113,8 +113,10 @@ Import local exports:
   import-gvoice          Import Google Voice history from Takeout export
   import-imazing-csv     Import Messages CSV exports created by iMazing
   import-imessage        Import iMessages from local database
+  import-job             Start or inspect a historical import job
   import-maildir         Import a Maildir or Maildir++ archive
   import-mbox            Import an MBOX export into msgvault
+  import-messages        Import JSON documents or email projections
   import-messenger       Import Facebook Messenger from a Meta data export
   import-pst             Import a PST (Outlook) archive into msgvault
   import-slackdump       Import a Slackdump export
@@ -159,7 +161,7 @@ Maintenance and repair:
   backup                  Back up the archive to a snapshot repository
   init-db                 Initialize the database schema
   migrate                 Apply this binary's archive schema migrations offline
-  migrate-outlook         Convert an Outlook EML import into a native Microsoft Graph mail source
+  migrate-outlook         Convert an Outlook EML import to Graph mail
   pack-attachments        Pack loose attachment files into sealed pack files
   policy                  Show room tiers and overrides
   purge-excluded-media    Reclaim locally stored media excluded by current policy
