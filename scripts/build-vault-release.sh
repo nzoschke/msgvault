@@ -2,7 +2,7 @@
 set -euo pipefail
 
 version="${1:?release version required}"
-[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-hc\.[0-9]+$ ]] || { echo "invalid release version" >&2; exit 1; }
+[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-hc\.[0-9]+(\.[a-z][a-z0-9-]*\.[0-9]+)?$ ]] || { echo "invalid release version" >&2; exit 1; }
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 output="${2:-$repo_root/dist}"
 mkdir -p "$output"
